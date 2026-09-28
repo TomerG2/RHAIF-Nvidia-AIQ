@@ -19,7 +19,8 @@ The Validated Pattern ships hybrid Lightning (GPU stack + in-cluster vLLM) with 
 |---|---|---|---|---|
 | `l4` (default) | `./pattern.sh make install` | NVFP4 (`nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4`) | `max_tokens: 1536`, `thinking_token_budget: 512`, vLLM `--max-model-len=4096` | 1× L4 24 GiB (`g6.2xlarge`) |
 | `gpu80` | `./pattern.sh make install PROFILE=gpu80` | BF16 (`nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16`) | `max_tokens: 32768`, no thinking budget, vLLM `--max-model-len=65536` | 1× A100 or H100 80 GiB |
-| `multigpu` | refused | placeholder for `--tensor-parallel-size` / `--data-parallel-size` | — | — |
+| `a10x4` | `./pattern.sh make install PROFILE=a10x4` | same BF16 checkpoint as `gpu80` | same token limits as `gpu80`, vLLM `--tensor-parallel-size=4` | 4× 24 GiB (`g5.12xlarge`, 4× A10G) |
+| `multigpu` | refused | placeholder for a general `--tensor-parallel-size` / `--data-parallel-size` profile | — | — |
 
 OpenShift overlays stay `values-openshift-base.yaml` + `values-openshift-hybrid-lightning.yaml`. LLM routing is the same for every installable profile: intent + shallow → in-cluster vLLM (Nemotron 3.5 Lightning); clarifier + deep → NVIDIA API Catalog (Nemotron 3 Ultra).
 

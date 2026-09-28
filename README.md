@@ -45,9 +45,11 @@ for labeling an existing GPU node.
 ./pattern.sh make install
 # 80 GiB BF16 / catalog token limits:
 ./pattern.sh make install PROFILE=gpu80
+# Same BF16 limits, tensor-parallel across 4x 24 GiB GPUs (g5.12xlarge):
+./pattern.sh make install PROFILE=a10x4
 ```
 
-`PROFILE` selects `variants/<name>/` and `profiles/<name>.yaml`. The default is `l4` (NVFP4, small token budgets, `g6.2xlarge`). `PROFILE=multigpu` is reserved and refused until tensor and data parallel are filled in.
+`PROFILE` selects `variants/<name>/` and `profiles/<name>.yaml`. The default is `l4` (NVFP4, small token budgets, `g6.2xlarge`). `a10x4` is the gpu80 BF16 checkpoint with `--tensor-parallel-size=4`. `PROFILE=multigpu` is reserved and refused until a general tensor and data parallel profile is filled in.
 
 ### Check readiness
 

@@ -37,9 +37,11 @@ VALUES_GLOBAL = REPO_ROOT / "values-global.yaml"
 VALUES_SECRET_TEMPLATE = REPO_ROOT / "values-secret.yaml.template"
 PROFILE_L4 = REPO_ROOT / "profiles" / "l4.yaml"
 PROFILE_GPU80 = REPO_ROOT / "profiles" / "gpu80.yaml"
+PROFILE_A10X4 = REPO_ROOT / "profiles" / "a10x4.yaml"
 PROFILE_MULTIGPU = REPO_ROOT / "profiles" / "multigpu.yaml"
 VARIANT_L4 = REPO_ROOT / "variants" / "l4" / "values-l4.yaml"
 VARIANT_GPU80 = REPO_ROOT / "variants" / "gpu80" / "values-gpu80.yaml"
+VARIANT_A10X4 = REPO_ROOT / "variants" / "a10x4" / "values-a10x4.yaml"
 VARIANT_MULTIGPU = REPO_ROOT / "variants" / "multigpu" / "values-multigpu.yaml"
 VLLM_CHART_VALUES = REPO_ROOT / "charts" / "all" / "vllm-inference-service" / "values.yaml"
 PROFILE_VALUE_FILE = "/profiles/{{ $.Values.global.hardwareProfile }}.yaml"
@@ -260,6 +262,7 @@ def test_pattern_values_target_umbrella_chart_and_serving_stack():
     for variant_path, profile_name in (
         (VARIANT_L4, "l4"),
         (VARIANT_GPU80, "gpu80"),
+        (VARIANT_A10X4, "a10x4"),
         (VARIANT_MULTIGPU, "multigpu"),
     ):
         variant = yaml.safe_load(variant_path.read_text(encoding="utf-8"))
@@ -425,6 +428,41 @@ def test_gpu80_profile_renders_bf16_catalog_limits():
     assert config["llms"]["nemotron_lightning_intent_llm"]["model_name"] == BF16_SERVED_MODEL_NAME
     assert config["llms"]["nemotron_lightning_intent_llm"]["max_tokens"] == 1024
     assert config["llms"]["nemotron_ultra_llm"]["max_tokens"] == 16384
+
+
+def test_a10x4_profile_splits_bf16_across_four_gpus():
+    manifests = _render_helm_chart(
+        VLLM_CHART,
+        "vllm-inference-service",
+        "aiq-inference",
+        str(VALUES_GLOBAL),
+        str(PROFILE_A10X4),
+    )
+    pvc = next(manifest for manifest in manifests if manifest["kind"] == "PersistentVolumeClaim")
+    assert pvc["spec"]["resources"]["requests"]["storage"] == "150Gi"
+
+    inference_service = next(manifest for manifest in manifests if manifest["kind"] == "InferenceService")
+    limits = inference_service["spec"]["predictor"]["model"]["resources"]["limits"]
+    assert limits["nvidia.com/gpu"] == "4"
+
+    serving_runtime = next(manifest for manifest in manifests if manifest["kind"] == "ServingRuntime")
+    container = serving_runtime["spec"]["containers"][0]
+    args = container["args"]
+    env = {item["name"]: item.get("value") for item in container["env"]}
+    joined_args = " ".join(args)
+
+    assert env["MODEL_ID"] == BF16_HF_REPO
+    assert f"--served-model-name={BF16_SERVED_MODEL_NAME}" in args
+    assert "--tensor-parallel-size=4" in args
+    assert "--max-model-len=65536" in args
+    assert "--max-num-batched-tokens=32768" in args
+    assert "--quantization" not in joined_args
+
+    config = _workflow_config(str(PROFILE_A10X4))
+    agent = config["llms"]["nemotron_lightning_agent_llm"]
+    assert agent["model_name"] == BF16_SERVED_MODEL_NAME
+    assert agent["max_tokens"] == 32768
+    assert "thinking_token_budget" not in agent["extra_body"]
 
 
 def test_l4_profile_workflow_keeps_small_token_budget():
