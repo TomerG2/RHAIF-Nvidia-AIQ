@@ -20,11 +20,10 @@ The Validated Pattern ships hybrid Lightning (GPU stack + in-cluster vLLM) with 
 | `l4` (default) | `./pattern.sh make install` | NVFP4 (`nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4`) | `max_tokens: 1536`, `thinking_token_budget: 512`, vLLM `--max-model-len=4096` | 1× L4 24 GiB (`g6.2xlarge`) |
 | `gpu80` | `./pattern.sh make install PROFILE=gpu80` | BF16 (`nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16`) | `max_tokens: 32768`, no thinking budget, vLLM `--max-model-len=65536` | 1× A100 or H100 80 GiB |
 | `a10x4` | `./pattern.sh make install PROFILE=a10x4` | same BF16 checkpoint as `gpu80` | same token limits as `gpu80`, vLLM `--tensor-parallel-size=4` | 4× 24 GiB (`g5.12xlarge`, 4× A10G) |
-| `multigpu` | refused | placeholder for a general `--tensor-parallel-size` / `--data-parallel-size` profile | — | — |
 
 OpenShift overlays stay `values-openshift-base.yaml` + `values-openshift-hybrid-lightning.yaml`. LLM routing is the same for every installable profile: intent + shallow → in-cluster vLLM (Nemotron 3.5 Lightning); clarifier + deep → NVIDIA API Catalog (Nemotron 3 Ultra).
 
-To add a profile, add `profiles/<name>.yaml` (vLLM args, GPU count, workflow token fields, optional `global.model`) and `variants/<name>/values-<name>.yaml` (`clusterGroup.name` and `global.hardwareProfile`). Add `profiles/<name>.mk` only when Phase 0 needs an instance-type default or a required SKU. A top-level `placeholder:` key makes `make install` refuse the profile.
+To add a profile, add `profiles/<name>.yaml` (vLLM args, GPU count, workflow token fields, optional `global.model`), `variants/<name>/values-<name>.yaml` (`clusterGroup.name` and `global.hardwareProfile`), and `profiles/<name>.mk` (Phase 0 GPU defaults or required-SKU flags; Make always includes it when `PROFILE` is set). A top-level `placeholder:` key makes `make install` refuse the profile.
 
 Workflow YAML is mounted from ConfigMap `aiq-workflow-config` (`charts/aiq-workflow-config/files/config_hybrid_lightning.yml`). Shallow `max_tokens`, `thinking_token_budget`, and the in-cluster `model_name` are rendered from the selected profile.
 

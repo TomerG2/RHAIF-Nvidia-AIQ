@@ -1,9 +1,0 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, Red Hat, Inc.
-# SPDX-License-Identifier: Apache-2.0
-#
-# Placeholder for single-node multi-GPU. Not installable.
-# Fill these in before removing the placeholder key:
-# - vllmInferenceService.predictor.resources.limits["nvidia.com/gpu"]
-# - vllmServingRuntime.args: --tensor-parallel-size and --data-parallel-size
-# - MachineSet replica count in profiles/multigpu.mk
-placeholder: Multi-GPU tensor and data parallel is not implemented.

@@ -38,11 +38,9 @@ VALUES_SECRET_TEMPLATE = REPO_ROOT / "values-secret.yaml.template"
 PROFILE_L4 = REPO_ROOT / "profiles" / "l4.yaml"
 PROFILE_GPU80 = REPO_ROOT / "profiles" / "gpu80.yaml"
 PROFILE_A10X4 = REPO_ROOT / "profiles" / "a10x4.yaml"
-PROFILE_MULTIGPU = REPO_ROOT / "profiles" / "multigpu.yaml"
 VARIANT_L4 = REPO_ROOT / "variants" / "l4" / "values-l4.yaml"
 VARIANT_GPU80 = REPO_ROOT / "variants" / "gpu80" / "values-gpu80.yaml"
 VARIANT_A10X4 = REPO_ROOT / "variants" / "a10x4" / "values-a10x4.yaml"
-VARIANT_MULTIGPU = REPO_ROOT / "variants" / "multigpu" / "values-multigpu.yaml"
 VLLM_CHART_VALUES = REPO_ROOT / "charts" / "all" / "vllm-inference-service" / "values.yaml"
 PROFILE_VALUE_FILE = "/profiles/{{ $.Values.global.hardwareProfile }}.yaml"
 SERVED_MODEL_NAME = "nemotron-3.5-lightning-30b-a3b"
@@ -263,7 +261,6 @@ def test_pattern_values_target_umbrella_chart_and_serving_stack():
         (VARIANT_L4, "l4"),
         (VARIANT_GPU80, "gpu80"),
         (VARIANT_A10X4, "a10x4"),
-        (VARIANT_MULTIGPU, "multigpu"),
     ):
         variant = yaml.safe_load(variant_path.read_text(encoding="utf-8"))
         assert variant["clusterGroup"]["name"] == profile_name
@@ -471,20 +468,6 @@ def test_l4_profile_workflow_keeps_small_token_budget():
     assert agent["model_name"] == SERVED_MODEL_NAME
     assert agent["max_tokens"] == 1536
     assert agent["extra_body"]["thinking_token_budget"] == 512
-
-
-def test_multigpu_profile_fails_to_render():
-    try:
-        _render_helm_chart(
-            VLLM_CHART,
-            "vllm-inference-service",
-            "aiq-inference",
-            str(PROFILE_MULTIGPU),
-        )
-    except subprocess.CalledProcessError as error:
-        assert "not implemented" in error.stderr
-        return
-    raise AssertionError("multigpu profile rendered")
 
 
 def test_nvidia_jwt_external_secrets_stay_disabled():

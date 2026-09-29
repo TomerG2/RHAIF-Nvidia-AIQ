@@ -27,5 +27,3 @@ on one 80 GiB GPU. The `l4` profile remains the NVFP4 bootstrap.
 | `extra_body.thinking_token_budget` | `512` | omitted |
 | Model-cache PVC | `80Gi` | `150Gi` |
 | Minimum GPU | L4 24 GiB | H100/A100 80 GiB |
-
-`multigpu` is a placeholder (`profiles/multigpu.yaml`) for a later `--tensor-parallel-size` / `--data-parallel-size` profile. `make install PROFILE=multigpu` is refused.

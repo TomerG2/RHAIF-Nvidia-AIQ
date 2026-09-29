@@ -1,8 +1,0 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, Red Hat, Inc.
-# SPDX-License-Identifier: Apache-2.0
-#
-# Placeholder. profiles/multigpu.yaml is not installable until tensor and data parallel are filled in.
-clusterGroup:
-  name: multigpu
-global:
-  hardwareProfile: multigpu

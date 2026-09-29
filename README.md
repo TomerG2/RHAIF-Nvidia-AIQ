@@ -49,7 +49,7 @@ for labeling an existing GPU node.
 ./pattern.sh make install PROFILE=a10x4
 ```
 
-`PROFILE` selects `variants/<name>/` and `profiles/<name>.yaml`. The default is `l4` (NVFP4, small token budgets, `g6.2xlarge`). `a10x4` is the gpu80 BF16 checkpoint with `--tensor-parallel-size=4`. `PROFILE=multigpu` is reserved and refused until a general tensor and data parallel profile is filled in.
+`PROFILE` selects `variants/<name>/` and `profiles/<name>.yaml`. The default is `l4` (NVFP4, small token budgets, `g6.2xlarge`). `a10x4` is the gpu80 BF16 checkpoint with `--tensor-parallel-size=4`.
 
 ### Check readiness
 
