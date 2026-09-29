@@ -1,8 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, Red Hat, Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Default serving profile: single L4 24 GiB (g6.2xlarge), NVFP4, small token budgets.
+# Default serving profile: NVFP4 checkpoint, small token budgets.
 clusterGroup:
-  name: l4
+  name: nvfp4
 global:
-  hardwareProfile: l4
+  hardwareProfile: nvfp4

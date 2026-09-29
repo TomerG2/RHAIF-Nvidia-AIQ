@@ -11,8 +11,8 @@ global:
     disabled: false
   secretStore:
     backend: vault
-  # Default checkpoint is the L4 NVFP4 profile. profiles/gpu80.yaml overrides this.
-  hardwareProfile: l4
+  # Default checkpoint is the NVFP4 profile. profiles/bf16.yaml overrides this.
+  hardwareProfile: nvfp4
   model:
     hfRepo: nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4
     servedName: nemotron-3.5-lightning-30b-a3b
@@ -25,7 +25,7 @@ global:
   # Optional StorageClass for the vLLM model-cache PVC (omit or empty = cluster default).
   storageClass: ""
 main:
-  variant: l4
+  variant: nvfp4
   multiSourceConfig:
     enabled: true
     clusterGroupChartVersion: 0.9.*

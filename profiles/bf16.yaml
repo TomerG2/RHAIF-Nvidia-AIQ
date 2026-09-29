@@ -1,7 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, Red Hat, Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Single 80 GiB GPU, full-precision BF16 weights (not NVFP4, not FP16).
+# Non-quantized BF16 weights on one GPU (not NVFP4, not FP16).
+# Needs a card that can hold the ~60 GB weights (example: A100 or H100 80 GiB).
 # NVIDIA validates about 256K context for this checkpoint on one H100 80GB.
 # Catalog parity uses a smaller window: max-model-len 65536 and shallow max_tokens 32768.
 # Do not pass --quantization; vLLM reads dtype from the checkpoint.

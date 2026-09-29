@@ -1,8 +1,10 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, Red Hat, Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
-# L4 24 GiB bootstrap. NVFP4 quantization comes from the checkpoint config.json.
+# NVFP4 quantized checkpoint with small token budgets.
+# Quantization comes from the checkpoint config.json.
 # Keep vllmServingRuntime.args aligned with charts/all/vllm-inference-service/values.yaml.
+# Example Phase 0 worker: one NVIDIA L4 (AWS g6.2xlarge).
 global:
   model:
     hfRepo: nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4

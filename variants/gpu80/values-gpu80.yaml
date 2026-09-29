@@ -1,8 +1,0 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, Red Hat, Inc.
-# SPDX-License-Identifier: Apache-2.0
-#
-# Single 80 GiB GPU (A100 or H100). BF16 checkpoint and catalog-parity token limits.
-clusterGroup:
-  name: gpu80
-global:
-  hardwareProfile: gpu80

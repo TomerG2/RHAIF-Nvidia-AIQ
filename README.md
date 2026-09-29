@@ -43,13 +43,13 @@ for labeling an existing GPU node.
 
 ```bash
 ./pattern.sh make install
-# 80 GiB BF16 / catalog token limits:
-./pattern.sh make install PROFILE=gpu80
-# Same BF16 limits, tensor-parallel across 4x 24 GiB GPUs (g5.12xlarge):
-./pattern.sh make install PROFILE=a10x4
+# BF16 / catalog token limits:
+./pattern.sh make install PROFILE=bf16
+# Same BF16 limits, tensor-parallel across 4 GPUs:
+./pattern.sh make install PROFILE=bf16-tp4
 ```
 
-`PROFILE` selects `variants/<name>/` and `profiles/<name>.yaml`. The default is `l4` (NVFP4, small token budgets, `g6.2xlarge`). `a10x4` is the gpu80 BF16 checkpoint with `--tensor-parallel-size=4`.
+`PROFILE` selects `variants/<name>/` and `profiles/<name>.yaml`. The default is `nvfp4` (NVFP4 checkpoint, small token budgets). `bf16-tp4` is the `bf16` checkpoint with `--tensor-parallel-size=4`.
 
 ### Check readiness
 

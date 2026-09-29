@@ -1,8 +1,9 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, Red Hat, Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Four 24 GiB GPUs (g5.12xlarge: 4x A10G). Same BF16 checkpoint and token limits as gpu80.
-# Tensor parallel splits the ~60 GB weights across the four cards. One card cannot hold them.
+# Same BF16 checkpoint and token limits as bf16, with --tensor-parallel-size=4.
+# Tensor parallel splits the ~60 GB weights across four GPUs. One card cannot hold them.
+# Example Phase 0 worker: g5.12xlarge (4x A10G 24 GiB).
 # If vLLM OOMs at 65536 context, lower --max-model-len and maxTokens together.
 global:
   model:

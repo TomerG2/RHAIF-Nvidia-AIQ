@@ -35,12 +35,12 @@ DEFAULT_LIGHTNING_BASE_URL = (
 )
 VALUES_GLOBAL = REPO_ROOT / "values-global.yaml"
 VALUES_SECRET_TEMPLATE = REPO_ROOT / "values-secret.yaml.template"
-PROFILE_L4 = REPO_ROOT / "profiles" / "l4.yaml"
-PROFILE_GPU80 = REPO_ROOT / "profiles" / "gpu80.yaml"
-PROFILE_A10X4 = REPO_ROOT / "profiles" / "a10x4.yaml"
-VARIANT_L4 = REPO_ROOT / "variants" / "l4" / "values-l4.yaml"
-VARIANT_GPU80 = REPO_ROOT / "variants" / "gpu80" / "values-gpu80.yaml"
-VARIANT_A10X4 = REPO_ROOT / "variants" / "a10x4" / "values-a10x4.yaml"
+PROFILE_NVFP4 = REPO_ROOT / "profiles" / "nvfp4.yaml"
+PROFILE_BF16 = REPO_ROOT / "profiles" / "bf16.yaml"
+PROFILE_BF16_TP4 = REPO_ROOT / "profiles" / "bf16-tp4.yaml"
+VARIANT_NVFP4 = REPO_ROOT / "variants" / "nvfp4" / "values-nvfp4.yaml"
+VARIANT_BF16 = REPO_ROOT / "variants" / "bf16" / "values-bf16.yaml"
+VARIANT_BF16_TP4 = REPO_ROOT / "variants" / "bf16-tp4" / "values-bf16-tp4.yaml"
 VLLM_CHART_VALUES = REPO_ROOT / "charts" / "all" / "vllm-inference-service" / "values.yaml"
 PROFILE_VALUE_FILE = "/profiles/{{ $.Values.global.hardwareProfile }}.yaml"
 SERVED_MODEL_NAME = "nemotron-3.5-lightning-30b-a3b"
@@ -203,7 +203,7 @@ def test_pattern_values_target_umbrella_chart_and_serving_stack():
     assert values_global["global"]["singleArgoCD"] is True
     assert values_global["global"]["secretLoader"]["disabled"] is False
     assert values_global["global"]["secretStore"]["backend"] == "vault"
-    assert values_global["global"]["hardwareProfile"] == "l4"
+    assert values_global["global"]["hardwareProfile"] == "nvfp4"
     assert values_global["global"]["model"]["hfRepo"] == HF_REPO
     assert values_global["global"]["model"]["servedName"] == SERVED_MODEL_NAME
     assert values_global["global"]["rhoai"]["version"] == "3.5"
@@ -212,7 +212,7 @@ def test_pattern_values_target_umbrella_chart_and_serving_stack():
     )
     assert values_global["global"]["inference"]["namespace"] == "aiq-inference"
     assert values_global["global"]["storageClass"] == ""
-    assert values_global["main"]["variant"] == "l4"
+    assert values_global["main"]["variant"] == "nvfp4"
     assert "clusterGroupName" not in values_global["main"]
 
     applications = values_global["clusterGroup"]["applications"]
@@ -258,9 +258,9 @@ def test_pattern_values_target_umbrella_chart_and_serving_stack():
     assert "/overrides/values-openshift-hybrid-lightning.yaml" in applications["aiq"]["extraValueFiles"]
 
     for variant_path, profile_name in (
-        (VARIANT_L4, "l4"),
-        (VARIANT_GPU80, "gpu80"),
-        (VARIANT_A10X4, "a10x4"),
+        (VARIANT_NVFP4, "nvfp4"),
+        (VARIANT_BF16, "bf16"),
+        (VARIANT_BF16_TP4, "bf16-tp4"),
     ):
         variant = yaml.safe_load(variant_path.read_text(encoding="utf-8"))
         assert variant["clusterGroup"]["name"] == profile_name
@@ -380,9 +380,9 @@ def test_eso_bindings_render_identity_external_secrets():
         ]
 
 
-def test_l4_profile_args_match_chart_defaults():
+def test_nvfp4_profile_args_match_chart_defaults():
     chart_values = yaml.safe_load(VLLM_CHART_VALUES.read_text(encoding="utf-8"))
-    profile = yaml.safe_load(PROFILE_L4.read_text(encoding="utf-8"))
+    profile = yaml.safe_load(PROFILE_NVFP4.read_text(encoding="utf-8"))
     assert profile["vllmServingRuntime"]["args"] == chart_values["vllmServingRuntime"]["args"]
     assert profile["global"]["model"]["hfRepo"] == HF_REPO
     assert profile["global"]["model"]["servedName"] == SERVED_MODEL_NAME
@@ -390,13 +390,13 @@ def test_l4_profile_args_match_chart_defaults():
     assert profile["workflowProfile"]["lightningAgent"]["thinkingTokenBudget"] == 512
 
 
-def test_gpu80_profile_renders_bf16_catalog_limits():
+def test_bf16_profile_renders_catalog_limits():
     manifests = _render_helm_chart(
         VLLM_CHART,
         "vllm-inference-service",
         "aiq-inference",
         str(VALUES_GLOBAL),
-        str(PROFILE_GPU80),
+        str(PROFILE_BF16),
     )
     pvc = next(manifest for manifest in manifests if manifest["kind"] == "PersistentVolumeClaim")
     assert pvc["spec"]["resources"]["requests"]["storage"] == "150Gi"
@@ -416,7 +416,7 @@ def test_gpu80_profile_renders_bf16_catalog_limits():
     assert "--kv-cache-dtype=fp8" not in args
     assert "--quantization" not in joined_args
 
-    config = _workflow_config(str(PROFILE_GPU80))
+    config = _workflow_config(str(PROFILE_BF16))
     agent = config["llms"]["nemotron_lightning_agent_llm"]
     assert agent["model_name"] == BF16_SERVED_MODEL_NAME
     assert agent["max_tokens"] == 32768
@@ -427,13 +427,13 @@ def test_gpu80_profile_renders_bf16_catalog_limits():
     assert config["llms"]["nemotron_ultra_llm"]["max_tokens"] == 16384
 
 
-def test_a10x4_profile_splits_bf16_across_four_gpus():
+def test_bf16_tp4_profile_splits_across_four_gpus():
     manifests = _render_helm_chart(
         VLLM_CHART,
         "vllm-inference-service",
         "aiq-inference",
         str(VALUES_GLOBAL),
-        str(PROFILE_A10X4),
+        str(PROFILE_BF16_TP4),
     )
     pvc = next(manifest for manifest in manifests if manifest["kind"] == "PersistentVolumeClaim")
     assert pvc["spec"]["resources"]["requests"]["storage"] == "150Gi"
@@ -455,15 +455,15 @@ def test_a10x4_profile_splits_bf16_across_four_gpus():
     assert "--max-num-batched-tokens=32768" in args
     assert "--quantization" not in joined_args
 
-    config = _workflow_config(str(PROFILE_A10X4))
+    config = _workflow_config(str(PROFILE_BF16_TP4))
     agent = config["llms"]["nemotron_lightning_agent_llm"]
     assert agent["model_name"] == BF16_SERVED_MODEL_NAME
     assert agent["max_tokens"] == 32768
     assert "thinking_token_budget" not in agent["extra_body"]
 
 
-def test_l4_profile_workflow_keeps_small_token_budget():
-    config = _workflow_config(str(PROFILE_L4))
+def test_nvfp4_profile_workflow_keeps_small_token_budget():
+    config = _workflow_config(str(PROFILE_NVFP4))
     agent = config["llms"]["nemotron_lightning_agent_llm"]
     assert agent["model_name"] == SERVED_MODEL_NAME
     assert agent["max_tokens"] == 1536

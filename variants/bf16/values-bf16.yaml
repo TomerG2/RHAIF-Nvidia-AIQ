@@ -1,8 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, Red Hat, Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Four 24 GiB GPUs, tensor parallel 4, BF16 checkpoint and gpu80 token limits.
+# Non-quantized BF16 checkpoint and catalog-parity token limits on one GPU.
 clusterGroup:
-  name: a10x4
+  name: bf16
 global:
-  hardwareProfile: a10x4
+  hardwareProfile: bf16

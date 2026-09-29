@@ -13,13 +13,13 @@ The pattern ships the AI-Q umbrella Helm chart at `charts/aiq2-web` (NGC `aiq-ag
 
 ## Deployment profile
 
-The Validated Pattern ships hybrid Lightning (GPU stack + in-cluster vLLM) with selectable serving profiles. `main.variant` in `values-global.yaml` defaults to `l4`. `./pattern.sh make install PROFILE=<name>` sets `TARGET_VARIANT` and loads `variants/<name>/values-<name>.yaml`, which points vLLM and the workflow chart at `profiles/<name>.yaml`.
+The Validated Pattern ships hybrid Lightning (GPU stack + in-cluster vLLM) with selectable serving profiles. Profiles are named by serving config (checkpoint and parallelism), not by GPU SKU. `main.variant` in `values-global.yaml` defaults to `nvfp4`. `./pattern.sh make install PROFILE=<name>` sets `TARGET_VARIANT` and loads `variants/<name>/values-<name>.yaml`, which points vLLM and the workflow chart at `profiles/<name>.yaml`.
 
-| Profile | Install | Checkpoint | Shallow Lightning | Minimum GPU |
+| Profile | Install | Checkpoint | Shallow Lightning | Example worker |
 |---|---|---|---|---|
-| `l4` (default) | `./pattern.sh make install` | NVFP4 (`nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4`) | `max_tokens: 1536`, `thinking_token_budget: 512`, vLLM `--max-model-len=4096` | 1× L4 24 GiB (`g6.2xlarge`) |
-| `gpu80` | `./pattern.sh make install PROFILE=gpu80` | BF16 (`nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16`) | `max_tokens: 32768`, no thinking budget, vLLM `--max-model-len=65536` | 1× A100 or H100 80 GiB |
-| `a10x4` | `./pattern.sh make install PROFILE=a10x4` | same BF16 checkpoint as `gpu80` | same token limits as `gpu80`, vLLM `--tensor-parallel-size=4` | 4× 24 GiB (`g5.12xlarge`, 4× A10G) |
+| `nvfp4` (default) | `./pattern.sh make install` | NVFP4 (`nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4`) | `max_tokens: 1536`, `thinking_token_budget: 512`, vLLM `--max-model-len=4096` | 1× L4 24 GiB (`g6.2xlarge`) |
+| `bf16` | `./pattern.sh make install PROFILE=bf16` | BF16 (`nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16`) | `max_tokens: 32768`, no thinking budget, vLLM `--max-model-len=65536` | 1× A100 or H100 80 GiB |
+| `bf16-tp4` | `./pattern.sh make install PROFILE=bf16-tp4` | same BF16 checkpoint as `bf16` | same token limits as `bf16`, vLLM `--tensor-parallel-size=4` | 4× 24 GiB (`g5.12xlarge`) |
 
 OpenShift overlays stay `values-openshift-base.yaml` + `values-openshift-hybrid-lightning.yaml`. LLM routing is the same for every installable profile: intent + shallow → in-cluster vLLM (Nemotron 3.5 Lightning); clarifier + deep → NVIDIA API Catalog (Nemotron 3 Ultra).
 
@@ -42,9 +42,9 @@ under `extra_body`, not as top-level LLM fields — `ChatOpenAI` rejects them in
 | Shallow (`nemotron_lightning_agent_llm`) | `true` | Tool-calling research agent |
 
 **Hosted catalog vs in-cluster OpenShift:** the catalog profile uses
-`max_tokens: 32768` for shallow Lightning. The `l4` profile caps vLLM at `--max-model-len=4096` with `--enforce-eager` on a single L4, so shallow uses
+`max_tokens: 32768` for shallow Lightning. The `nvfp4` profile caps vLLM at `--max-model-len=4096` with `--enforce-eager` on a single 24 GiB class card, so shallow uses
 `max_tokens: 1536` plus `extra_body.thinking_token_budget: 512` so the prompt, reasoning, and
-answer fit in the context window. The `gpu80` profile serves the BF16 checkpoint on one 80 GiB GPU (NVIDIA validates about 256K context for that card) with catalog-parity `--max-model-len=65536` and shallow `max_tokens: 32768`, and omits `thinking_token_budget`. vLLM reads quantization from `config.json`; do not pass `--quantization`.
+answer fit in the context window. The `bf16` profile serves the BF16 checkpoint on one GPU that can hold the weights (NVIDIA validates about 256K context on one H100 80GB) with catalog-parity `--max-model-len=65536` and shallow `max_tokens: 32768`, and omits `thinking_token_budget`. vLLM reads quantization from `config.json`; do not pass `--quantization`.
 
 Async jobs report `job_status.status: success` when finished (not `completed`).
 
@@ -63,8 +63,8 @@ The hybrid Lightning profile requires one GPU worker before OpenShift AI and vLL
 ./pattern.sh make create-gpu-machineset
 # or explicitly:
 ./pattern.sh make create-gpu-machineset GPU_INSTANCE_TYPE=g6.2xlarge GPU_REPLICAS=1
-# 80 GiB profile (pass the SKU you have; there is no single default):
-./pattern.sh make create-gpu-machineset PROFILE=gpu80 GPU_INSTANCE_TYPE=<80GiB-SKU>
+# 80 GiB BF16 profile (pass the SKU you have; there is no single default):
+./pattern.sh make create-gpu-machineset PROFILE=bf16 GPU_INSTANCE_TYPE=<80GiB-SKU>
 ```
 
 If AWS returns `InsufficientInstanceCapacity`, retry with a different availability zone:
@@ -92,7 +92,7 @@ Phase 0 is complete when at least one GPU worker is `Ready`, labeled `node-role.
 
 See [GPU_provisioning.md](https://github.com/validatedpatterns-sandbox/RHAIF-Nvidia-AIQ/blob/main/GPU_provisioning.md) for Azure defaults, manual MachineSet, bare-metal, and verification steps. Clusters without Machine API must add GPU nodes outside GitOps.
 
-The default `l4` profile uses **1× `g6.2xlarge`** (NVIDIA L4, 24 GiB VRAM) with the **NVFP4** checkpoint and an **80Gi** model-cache PVC. The `gpu80` profile uses the **BF16** checkpoint and a **150Gi** model-cache PVC. Set `global.storageClass` in `values-global.yaml` when the cluster default is not suitable. On-cluster checks for `gpu80` are listed in [TODO.md](https://github.com/validatedpatterns-sandbox/RHAIF-Nvidia-AIQ/blob/main/TODO.md).
+The default `nvfp4` profile uses **1× `g6.2xlarge`** (NVIDIA L4, 24 GiB VRAM) with the **NVFP4** checkpoint and an **80Gi** model-cache PVC. The `bf16` profile uses the **BF16** checkpoint and a **150Gi** model-cache PVC. Set `global.storageClass` in `values-global.yaml` when the cluster default is not suitable. On-cluster checks for `bf16` are listed in [TODO.md](https://github.com/validatedpatterns-sandbox/RHAIF-Nvidia-AIQ/blob/main/TODO.md).
 
 Default destination namespace is `aiq` (application) and `aiq-inference` (vLLM). Override `clusterGroup.namespaces` and each application's `namespace` in `values-global.yaml` only if your cluster requires different project names.
 
@@ -133,7 +133,7 @@ From the repository root, on the branch Argo CD should track:
 ./pattern.sh make validate-cluster
 ./pattern.sh make show
 ./pattern.sh make install
-# or: ./pattern.sh make install PROFILE=gpu80
+# or: ./pattern.sh make install PROFILE=bf16
 ./pattern.sh make argo-healthcheck
 ```
 
@@ -150,7 +150,7 @@ wave 20:  vllm-inference-service (Nemotron Lightning on RHOAI vLLM CUDA runtime)
 wave 30:  aiq (umbrella Helm chart)
 ```
 
-`eso-bindings` applications set `SkipDryRunOnMissingResource=true` so the first sync can wait for the ExternalSecret CRD. `clusterGroup.isHubCluster: true` selects kubernetes-auth `mountPath: hub` and role `hub-role` for every serving profile. The default Pattern cluster group name is `l4`.
+`eso-bindings` applications set `SkipDryRunOnMissingResource=true` so the first sync can wait for the ExternalSecret CRD. `clusterGroup.isHubCluster: true` selects kubernetes-auth `mountPath: hub` and role `hub-role` for every serving profile. The default Pattern cluster group name is `nvfp4`.
 
 `make install` always provisions OpenShift GitOps (`vp-gitops`) when it is missing. `values-global.yaml` sets `global.singleArgoCD: true` so clustergroup Applications are created in that instance instead of a second Argo CD in `aiq-prod`.
 

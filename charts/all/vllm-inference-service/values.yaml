@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, Red Hat, Inc.
 # SPDX-License-Identifier: Apache-2.0
 # Model IDs come from values-global.yaml global.model.{hfRepo,servedName}.
-# Args below match profiles/l4.yaml. Other serving profiles override them via extraValueFiles.
+# Args below match profiles/nvfp4.yaml. Other serving profiles override them via extraValueFiles.
 
 modelCache:
   enabled: true

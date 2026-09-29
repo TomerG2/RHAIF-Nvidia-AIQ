@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, Red Hat, Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# BF16 checkpoint with tensor parallel 4, same token limits as bf16.
+clusterGroup:
+  name: bf16-tp4
+global:
+  hardwareProfile: bf16-tp4

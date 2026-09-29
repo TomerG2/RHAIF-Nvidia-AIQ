@@ -14,7 +14,7 @@ docs_url: https://github.com/validatedpatterns-sandbox/RHAIF-Nvidia-AIQ/blob/mai
 tier: sandbox
 owners: itay1551
 requirements:
-  hub: # Primary cluster. Default variant is l4 (single-cluster; no ACM hub/spoke).
+  hub: # Primary cluster. Default variant is nvfp4 (single-cluster; no ACM hub/spoke).
     compute:
       platform:
         aws:
@@ -47,14 +47,14 @@ extra_features:
 external_requirements:
   # This gets added as a note in the cluster sizing doc page
   cluster_sizing_note: >
-    This pattern installs on a single OpenShift cluster (default variant l4).
+    This pattern installs on a single OpenShift cluster (default variant nvfp4).
     The instance types above are modest generic equivalents for the
-    control plane and generic workers. The l4 profile requires one
+    control plane and generic workers. The nvfp4 profile requires one
     GPU worker in Phase 0 — AWS default is 1× g6.2xlarge (NVIDIA L4) via make
     create-gpu-machineset; Azure default is 2× Standard_NC8as_T4_v3 via make
     create-gpu-machineset-azure (override GPU_REPLICAS_AZURE=1 for one worker).
-    PROFILE=gpu80 serves BF16 on one 80 GiB GPU and requires GPU_INSTANCE_TYPE
-    or GPU_VM_SIZE. The pattern also installs OpenShift AI and the GPU Operator.
+    PROFILE=bf16 serves BF16 on one GPU that can hold the weights and requires
+    GPU_INSTANCE_TYPE or GPU_VM_SIZE. The pattern also installs OpenShift AI and the GPU Operator.
     Nemotron 3 Ultra (clarifier and deep research) uses the NVIDIA API Catalog
     (NVIDIA_API_KEY). Tavily is optional for web research. Postgres and the vLLM
     model-cache PVC use the cluster default StorageClass unless you set

@@ -5,9 +5,9 @@ SPDX-License-Identifier: Apache-2.0
 
 # GPU worker provisioning (Phase 0)
 
-Phase 0 prepares GPU worker nodes for a serving profile. Operator install and vLLM serving charts are part of the GitOps path, not Phase 0. Default `PROFILE` is `l4`. `PROFILE=gpu80` requires you to pass an 80 GiB `GPU_INSTANCE_TYPE` (AWS) or `GPU_VM_SIZE` (Azure).
+Phase 0 prepares GPU worker nodes for a serving profile. Operator install and vLLM serving charts are part of the GitOps path, not Phase 0. Default `PROFILE` is `nvfp4`. `PROFILE=bf16` requires you to pass an 80 GiB `GPU_INSTANCE_TYPE` (AWS) or `GPU_VM_SIZE` (Azure).
 
-This document mirrors [validatedpatterns/rag-llm-gitops GPU_provisioning.md](https://github.com/validatedpatterns/rag-llm-gitops/blob/main/GPU_provisioning.md). The hybrid Lightning profile defaults to **one** `g6.2xlarge` AWS worker (NVIDIA L4). Adjust with Makefile overrides when your quota or model sizing differs.
+This document mirrors [validatedpatterns/rag-llm-gitops GPU_provisioning.md](https://github.com/validatedpatterns/rag-llm-gitops/blob/main/GPU_provisioning.md). The hybrid Lightning `nvfp4` profile defaults to **one** `g6.2xlarge` AWS worker (NVIDIA L4). Adjust with Makefile overrides when your quota or model sizing differs.
 
 ## When to use Ansible MachineSet provisioning
 
@@ -110,7 +110,7 @@ The GPU Operator reconciles a single cluster-wide policy. On clusters that alrea
 
 ## Install order with the Validated Pattern
 
-**Hybrid Lightning (default `PROFILE=l4`):**
+**Hybrid Lightning (default `PROFILE=nvfp4`):**
 
 1. **Phase 0 (this doc).** Provision GPU workers: AWS `GPU_REPLICAS=1` (default); Azure `GPU_REPLICAS_AZURE=2` (default) or `1` for a single hybrid-Lightning worker.
 2. **Namespaces + secrets.** `./pattern.sh make ensure-pattern-namespaces` then `./pattern.sh make load-secrets`.

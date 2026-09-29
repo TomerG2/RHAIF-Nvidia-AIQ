@@ -4,8 +4,8 @@
 
 include Makefile-common
 
-# Serving profile. Unset uses main.variant (l4) from values-global.yaml.
-# PROFILE=gpu80 exports TARGET_VARIANT so the utility container installs that variant.
+# Serving profile. Unset uses main.variant (nvfp4) from values-global.yaml.
+# PROFILE=bf16 exports TARGET_VARIANT so the utility container installs that variant.
 PROFILE ?=
 
 ifneq ($(PROFILE),)
