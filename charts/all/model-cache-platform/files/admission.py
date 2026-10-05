@@ -52,10 +52,20 @@ class Server(ThreadingHTTPServer):
         context.load_cert_chain("/tls/tls.crt", "/tls/tls.key")
         try:
             sock.settimeout(10)
-            return context.wrap_socket(sock, server_side=True), address
+            return context.wrap_socket(sock, server_side=True, do_handshake_on_connect=False), address
         except Exception:
             sock.close()
             raise
+
+    def process_request_thread(self, request, client_address):
+        # Handshakes run in the request thread, so a client withholding TLS
+        # bytes cannot stall the accept loop for legitimate admissions.
+        try:
+            request.do_handshake()
+        except Exception:
+            self.shutdown_request(request)
+            return
+        super().process_request_thread(request, client_address)
 
 
 class Handler(BaseHTTPRequestHandler):
