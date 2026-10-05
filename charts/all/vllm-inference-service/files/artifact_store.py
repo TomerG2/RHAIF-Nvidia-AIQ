@@ -129,6 +129,9 @@ def verify_publication(s3, bucket, prefix, manifest):
 
 
 def publish(s3, uri, repo, revision, directory):
+    # The optional Xet client stages large reconstruction buffers per file.
+    # Use HF's streaming HTTP downloader inside the bounded publication pod.
+    os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
     from huggingface_hub import HfApi, hf_hub_download
 
     if not re.fullmatch(r"[0-9a-f]{40}", revision):
