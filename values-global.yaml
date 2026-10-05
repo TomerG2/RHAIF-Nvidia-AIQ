@@ -94,7 +94,7 @@ clusterGroup:
     kserve-localmodel-jobs: {}
     openshift-lws-operator:
       operatorGroup: true
-      targetNamespaces: []
+      targetNamespaces: [openshift-lws-operator] # LWS supports OwnNamespace, not AllNamespaces.
     cert-manager-operator:
       operatorGroup: true
       targetNamespaces: []
