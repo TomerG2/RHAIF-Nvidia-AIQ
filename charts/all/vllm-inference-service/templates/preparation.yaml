@@ -138,7 +138,9 @@ metadata:
     argocd.argoproj.io/sync-options: Prune=false,Delete=false
 spec:
   accessModes: [ReadWriteOnce]
+  {{- if .Values.publication.scratchStorageClass }}
   storageClassName: {{ .Values.publication.scratchStorageClass | quote }}
+  {{- end }}
   resources:
     requests: {storage: {{ .Values.publication.scratchSize }}}
 ---

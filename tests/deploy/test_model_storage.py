@@ -105,6 +105,7 @@ def test_publication_cache_and_serving_order(tmp_path):
     original = publication["metadata"]["name"]
     scratch = next(d for d in documents if d["kind"] == "PersistentVolumeClaim" and d["metadata"]["name"] == "aiq-model-publication-scratch")
     assert wave(scratch) == wave(publication)  # WaitForFirstConsumer must see the job in the same wave.
+    assert "storageClassName" not in scratch["spec"]  # Empty must use the cluster default, not disable provisioning.
     assert publication["spec"]["template"]["spec"]["volumes"][-1]["persistentVolumeClaim"]["claimName"] == scratch["metadata"]["name"]
     assert "ephemeral-storage" not in publication["spec"]["template"]["spec"]["containers"][0]["resources"]["requests"]
     changed = render(tmp_path, {"global": {"serving": {"replicas": 2}}})
