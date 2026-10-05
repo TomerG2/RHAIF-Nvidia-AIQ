@@ -22,6 +22,19 @@ gate = load("gate")
 distributed = load("distributed")
 
 
+def test_publication_recovers_only_its_abandoned_staging(tmp_path, monkeypatch):
+    abandoned = tmp_path / ".aiq-publish-abandoned"
+    abandoned.mkdir()
+    (abandoned / "partial").write_bytes(b"incomplete")
+    other = tmp_path / "unrelated"
+    other.mkdir()
+    target = Mock(return_value="published")
+    monkeypatch.setattr(store, "_publish", target)
+    assert store.publish(None, "uri", "repo", "revision", tmp_path) == "published"
+    assert not abandoned.exists() and other.is_dir()
+    target.assert_called_once_with(None, "uri", "repo", "revision", tmp_path)
+
+
 @pytest.mark.parametrize("name", ["../secret", "/absolute", "folder/../secret", "./file", "a//b", "a\\b", "_READY.json", ".aiq-ready.json", "x/.aiq-part-file"])
 def test_rejects_unsafe_manifest_paths(name):
     with pytest.raises(ValueError):

@@ -129,6 +129,18 @@ def verify_publication(s3, bucket, prefix, manifest):
 
 
 def publish(s3, uri, repo, revision, directory):
+    directory.mkdir(parents=True, exist_ok=True)
+    # Jobs for successive Git revisions can overlap on the same scratch PVC.
+    # Only the lock holder may clean staging directories left by a killed job.
+    with (directory / ".aiq-publication-lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        for staging in directory.glob(".aiq-publish-*"):
+            if staging.is_dir() and not staging.is_symlink():
+                shutil.rmtree(staging)
+        return _publish(s3, uri, repo, revision, directory)
+
+
+def _publish(s3, uri, repo, revision, directory):
     # The optional Xet client stages large reconstruction buffers per file.
     # Use HF's streaming HTTP downloader inside the bounded publication pod.
     os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
@@ -159,7 +171,7 @@ def publish(s3, uri, repo, revision, directory):
 
     def upload(file):
         name = safe_path(file.rfilename)
-        with tempfile.TemporaryDirectory(dir=directory) as staging:
+        with tempfile.TemporaryDirectory(prefix=".aiq-publish-", dir=directory) as staging:
             path = Path(hf_hub_download(repo, name, revision=revision, local_dir=staging))
             with path.open("rb") as stream:
                 sha256 = digest(stream)
