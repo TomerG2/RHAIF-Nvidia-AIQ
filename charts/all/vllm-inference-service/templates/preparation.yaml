@@ -1,0 +1,195 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "aiq.scriptsName" . }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  config.json: {{ .Values.global | toJson | quote }}
+  artifact_store.py: |
+{{ .Files.Get "files/artifact_store.py" | indent 4 }}
+  gate.py: |
+{{ .Files.Get "files/gate.py" | indent 4 }}
+  metrics.py: |
+{{ .Files.Get "files/metrics.py" | indent 4 }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aiq-model-gate
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: aiq-model-gate
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+rules:
+  - apiGroups: [""]
+    resources: [nodes, pods]
+    verbs: [get, list]
+  - apiGroups: [apiextensions.k8s.io]
+    resources: [customresourcedefinitions]
+    verbs: [get]
+  - apiGroups: [serving.kserve.io]
+    resources: [localmodelcaches, localmodelnodegroups]
+    verbs: [get, list]
+  - apiGroups: [datasciencecluster.opendatahub.io]
+    resources: [datascienceclusters]
+    verbs: [get]
+  - apiGroups: [operators.coreos.com]
+    resources: [clusterserviceversions]
+    verbs: [get, list]
+  - apiGroups: [k8s.cni.cncf.io]
+    resources: [network-attachment-definitions]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: aiq-model-gate
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: aiq-model-gate
+subjects:
+  - kind: ServiceAccount
+    name: aiq-model-gate
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: aiq-serving-backend-switch
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+rules:
+  - apiGroups: [serving.kserve.io]
+    resources: [inferenceservices, llminferenceservices]
+    resourceNames: [{{ include "vllm-inference-service.fullname" . }}]
+    verbs: [get, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: aiq-serving-backend-switch
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: aiq-serving-backend-switch
+subjects:
+  - kind: ServiceAccount
+    name: aiq-model-gate
+    namespace: {{ .Release.Namespace }}
+{{- range $stage, $wave := dict "preflight" "3" "cache" "17" "switch" "18" "serving" "25" }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: aiq-model-{{ $stage }}
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: {{ $wave | quote }}
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: {{ add (int $.Values.gate.timeoutSeconds) 60 }}
+  template:
+    metadata:
+      labels:
+        aiq.rhai.redhat.com/model-gate: "true"
+    spec:
+      restartPolicy: Never
+      serviceAccountName: aiq-model-gate
+      containers:
+        - name: gate
+          image: {{ $.Values.global.modelTools.image | quote }}
+          command: [python, /scripts/gate.py, {{ $stage }}]
+          env:
+            - {name: TIMEOUT_SECONDS, value: {{ $.Values.gate.timeoutSeconds | quote }}}
+            - {name: CACHE_NAME, value: {{ include "aiq.cacheName" $ | quote }}}
+            - {name: SERVICE_NAME, value: {{ include "vllm-inference-service.fullname" $ | quote }}}
+            - {name: REPLACE_BACKEND, value: {{ $.Values.migration.replaceBackend | quote }}}
+            - name: SERVING_URL
+              value: http://{{ include "vllm-inference-service.fullname" $ }}-{{ if gt (int $.Values.global.serving.nodesPerReplica) 1 }}distributed{{ else }}predictor{{ end }}.{{ $.Release.Namespace }}.svc
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: "1", memory: 512Mi}
+          volumeMounts:
+            - {name: scripts, mountPath: /scripts, readOnly: true}
+      volumes:
+        - name: scripts
+          configMap:
+            name: {{ include "aiq.scriptsName" $ }}
+{{- end }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: publish-{{ include "aiq.cacheName" . }}-{{ printf "%s%s" (include "aiq.scriptsName" .) (.Values.publication | toJson) | sha256sum | trunc 8 }}
+  labels:
+    aiq.rhai.redhat.com/stage: publication
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  backoffLimit: 4
+  activeDeadlineSeconds: {{ .Values.publication.timeoutSeconds }}
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      initContainers:
+        - name: wait-for-storage
+          image: {{ .Values.global.modelTools.image | quote }}
+          command: [python, /scripts/gate.py, storage]
+          envFrom:
+            - secretRef: {name: model-publisher}
+          env:
+            {{- include "aiq.s3Env" . | nindent 12 }}
+          volumeMounts:
+            - {name: scripts, mountPath: /scripts, readOnly: true}
+            - {name: ca, mountPath: /etc/aiq-ca, readOnly: true}
+      containers:
+        - name: publish
+          image: {{ .Values.global.modelTools.image | quote }}
+          command: [python, /scripts/artifact_store.py, publish]
+          envFrom:
+            - secretRef: {name: model-publisher}
+          env:
+            {{- include "aiq.s3Env" . | nindent 12 }}
+            - {name: MODEL_URI, value: {{ include "aiq.uri" . | quote }}}
+            - {name: HF_REPO, value: {{ .Values.global.model.hfRepo | quote }}}
+            - {name: HF_REVISION, value: {{ .Values.global.model.revision | quote }}}
+            - {name: MODEL_MAX_BYTES, value: {{ include "aiq.bytes" .Values.global.model.size | quote }}}
+            - {name: HF_HOME, value: /work/hf}
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef: {name: huggingface-secret, key: hftoken, optional: true}
+          resources:
+            requests: {cpu: "1", memory: 1Gi, ephemeral-storage: {{ .Values.publication.scratchSize }}}
+            limits: {cpu: "4", memory: 4Gi, ephemeral-storage: {{ .Values.publication.scratchSize }}}
+          volumeMounts:
+            - {name: scripts, mountPath: /scripts, readOnly: true}
+            - {name: ca, mountPath: /etc/aiq-ca, readOnly: true}
+            - {name: work, mountPath: /work}
+      volumes:
+        - name: scripts
+          configMap:
+            name: {{ include "aiq.scriptsName" . }}
+        - name: ca
+          configMap: {name: {{ .Values.global.modelStore.caConfigMap }}}
+        - name: work
+          emptyDir: {sizeLimit: {{ .Values.publication.scratchSize }}}
+{{- define "aiq.bytes" -}}
+{{- $value := toString . -}}
+{{- $unit := regexFind "(Ki|Mi|Gi|Ti)$" $value -}}
+{{- if not (regexMatch "^[0-9]+(Ki|Mi|Gi|Ti)?$" $value) }}{{ fail "Use integer bytes, Ki, Mi, Gi or Ti for model sizes" }}{{ end -}}
+{{- $multiplier := dict "" 1 "Ki" 1024 "Mi" 1048576 "Gi" 1073741824 "Ti" 1099511627776 -}}
+{{- mul (int64 (trimSuffix $unit $value)) (index $multiplier $unit) -}}
+{{- end -}}

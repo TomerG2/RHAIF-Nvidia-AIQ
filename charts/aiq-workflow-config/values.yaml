@@ -3,6 +3,10 @@
 # Stubs so `helm template` works standalone; Validated Patterns injects global.* at deploy time.
 # Defaults match profiles/nvfp4.yaml. A serving profile overrides these via extraValueFiles.
 global:
+  serving:
+    nodesPerReplica: 1
+  inference:
+    namespace: aiq-inference
   model:
     servedName: nemotron-3.5-lightning-30b-a3b
 clusterGroup: {}

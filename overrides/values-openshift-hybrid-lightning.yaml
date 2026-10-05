@@ -7,6 +7,33 @@
 aiq:
   apps:
     backend:
+      initContainers:
+        - name: wait-for-local-model
+          image: nvcr.io/nvidia/blueprint/aiq-agent:2.2.0
+          command: [python, -c]
+          args:
+            - |
+              import os, time, urllib.request, yaml
+              config = yaml.safe_load(open('/workflow/config_hybrid_lightning.yml'))
+              expression = config['llms']['nemotron_lightning_agent_llm']['base_url']
+              default = expression.split(':-', 1)[1][:-1]
+              endpoint = os.environ.get('AIQ_LIGHTNING_BASE_URL', default).removesuffix('/v1').rstrip('/')
+              while True:
+                  try:
+                      urllib.request.urlopen(endpoint + '/health', timeout=10).close()
+                      break
+                  except Exception:
+                      print('Waiting for the local serving endpoint', flush=True)
+                      time.sleep(10)
+          envFrom:
+            - secretRef: {name: aiq-credentials}
+          volumeMounts:
+            - name: workflow-config
+              mountPath: /workflow
+              readOnly: true
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "1", memory: 512Mi}
       env:
         CONFIG_FILE: /app/configs/config_hybrid_lightning.yml
       volumeMounts:

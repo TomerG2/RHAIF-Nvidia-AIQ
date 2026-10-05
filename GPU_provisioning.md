@@ -63,6 +63,19 @@ The playbook applies these conventions (same as rag-llm-gitops):
 
 Later RHOAI vLLM charts can target these nodes with matching tolerations and affinity.
 
+Before enabling serving, prepare enough local disk at `/var/lib/kserve/models`
+and label every cache-ready GPU node:
+
+```bash
+oc label node <gpu-node> aiq.rhai.redhat.com/model-cache=true
+```
+
+The default cache capacity is 200Gi for NVFP4 or 350Gi for BF16, including room
+for a previous revision. A capacity setting does not allocate physical disk.
+Node-local disk preparation, additional GPU nodes, and any RDMA fabric remain
+platform prerequisites. See [model storage and serving](docs/source/deployment/model-storage-and-serving.md)
+before selecting replicated or distributed layouts.
+
 ## Provision GPU workers on Azure
 
 ```bash

@@ -1,0 +1,146 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: model-store-bootstrap
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: model-store-bootstrap
+data:
+  bootstrap.py: |
+{{ .Files.Get "files/bootstrap.py" | indent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: aiq-storage-certificate-rollout
+rules:
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets]
+    resourceNames: [rustfs]
+    verbs: [get, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: aiq-storage-certificate-rollout
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: aiq-storage-certificate-rollout
+subjects:
+  - kind: ServiceAccount
+    name: model-store-bootstrap
+    namespace: {{ .Release.Namespace }}
+{{- range $namespace := list "aiq-model-storage" .Values.global.inference.namespace .Values.global.modelCache.jobNamespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: aiq-model-store-ca-writer
+  namespace: {{ $namespace }}
+rules:
+  - apiGroups: [""]
+    resources: [configmaps]
+    resourceNames: [{{ $.Values.global.modelStore.caConfigMap }}]
+    verbs: [get, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: aiq-model-store-ca-writer
+  namespace: {{ $namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: aiq-model-store-ca-writer
+subjects:
+  - kind: ServiceAccount
+    name: model-store-bootstrap
+    namespace: {{ $.Release.Namespace }}
+{{- end }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: model-store-bootstrap
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  activeDeadlineSeconds: 2100
+  backoffLimit: 3
+  template:
+    spec:
+      {{- include "model-store.bootstrap-pod" . | nindent 6 }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: model-store-reconcile
+spec:
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 2100
+      backoffLimit: 1
+      template:
+        spec:
+          {{- include "model-store.bootstrap-pod" . | nindent 10 }}
+{{- define "model-store.bootstrap-pod" }}
+serviceAccountName: model-store-bootstrap
+restartPolicy: OnFailure
+containers:
+  - name: bootstrap
+    image: {{ .Values.global.modelTools.image | quote }}
+    command: [python, /scripts/bootstrap.py]
+    envFrom:
+      - secretRef:
+          name: rustfs-admin
+    env:
+      - name: CLIENT_NAMESPACES
+        value: {{ printf "aiq-model-storage,%s,%s" .Values.global.inference.namespace .Values.global.modelCache.jobNamespace | quote }}
+      - name: CA_CONFIGMAP
+        value: {{ .Values.global.modelStore.caConfigMap | quote }}
+      - name: STORAGE_NAMESPACE
+        value: {{ .Release.Namespace }}
+      - name: STORAGE_WORKLOAD_KIND
+        value: {{ if .Values.rustfs.mode.distributed.enabled }}statefulsets{{ else }}deployments{{ end }}
+      - name: S3_ENDPOINT
+        value: {{ .Values.global.modelStore.endpoint | quote }}
+      - name: S3_BUCKET
+        value: {{ .Values.global.modelStore.bucket | quote }}
+      - name: S3_PREFIX
+        value: {{ .Values.global.modelStore.prefix | quote }}
+      - name: AWS_DEFAULT_REGION
+        value: {{ .Values.global.modelStore.region | quote }}
+    resources:
+      requests: {cpu: 100m, memory: 256Mi}
+      limits: {cpu: "1", memory: 1Gi}
+    securityContext:
+      allowPrivilegeEscalation: false
+      runAsNonRoot: true
+      capabilities: {drop: [ALL]}
+      seccompProfile: {type: RuntimeDefault}
+    volumeMounts:
+      - {name: scripts, mountPath: /scripts, readOnly: true}
+      - {name: tls, mountPath: /tls, readOnly: true}
+      - {name: publisher, mountPath: /credentials/publisher, readOnly: true}
+      - {name: reader, mountPath: /credentials/reader, readOnly: true}
+volumes:
+  - name: scripts
+    configMap: {name: model-store-bootstrap}
+  - name: tls
+    secret:
+      secretName: rustfs-server-tls
+      items: [{key: ca.crt, path: ca.crt}, {key: tls.crt, path: tls.crt}]
+  - name: publisher
+    secret: {secretName: model-publisher}
+  - name: reader
+    secret: {secretName: model-reader}
+{{- end }}

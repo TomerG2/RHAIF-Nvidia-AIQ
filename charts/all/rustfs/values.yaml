@@ -1,0 +1,63 @@
+# Upstream chart is vendored unchanged; see UPSTREAM.md for provenance.
+rustfs:
+  fullnameOverride: rustfs
+  replicaCount: 1
+  drivesPerNode: 1
+  mode:
+    standalone:
+      enabled: true
+      strategy:
+        type: Recreate
+    distributed:
+      enabled: false
+  image:
+    rustfs:
+      repository: quay.io/rustfs/rustfs
+      tag: 1.0.1@sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c
+    # The official RustFS image also supplies sh/mkdir/chmod for the chart init step.
+    initImage:
+      repository: quay.io/rustfs/rustfs
+      tag: 1.0.1@sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c
+  secret:
+    existingSecret: rustfs-admin
+  localEndpointHost:
+    autoInject: true
+  serviceAccount:
+    name: rustfs
+    automount: false
+  podSecurityContext:
+    runAsUser: 10001
+    runAsGroup: 10001
+    fsGroup: 10001
+    seccompProfile:
+      type: RuntimeDefault
+  storageclass:
+    name: ""
+    dataStorageSize: 250Gi
+    pvcAnnotations:
+      data:
+        argocd.argoproj.io/sync-options: Prune=false,Delete=false
+  config:
+    rustfs:
+      obs_log_directory: ""
+      obs_environment: production
+  # Use upstream certificate provisioning and HTTPS peer URLs/probes. Client
+  # authentication is SigV4; only the server certificate is needed by S3 clients.
+  mtls:
+    enabled: true
+  extraEnv:
+    - name: RUSTFS_SERVER_MTLS_ENABLE
+      value: "0"
+    - name: RUSTFS_TLS_KEYLOG
+      value: "0"
+  resources:
+    requests:
+      cpu: "1"
+      memory: 2Gi
+    limits:
+      cpu: "4"
+      memory: 8Gi
+  nodeSelector: {}
+  tolerations: []
+  podAnnotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false

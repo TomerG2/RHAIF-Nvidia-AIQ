@@ -1,0 +1,30 @@
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: aiq-model-tools
+spec:
+  tags:
+    - name: pinned
+      from:
+        kind: DockerImage
+        name: {{ .Values.global.modelTools.upstreamImage }}
+      importPolicy:
+        importMode: PreserveOriginal
+      referencePolicy:
+        type: Local
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: aiq-model-tools-pull
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:image-puller
+subjects:
+  - kind: Group
+    name: system:serviceaccounts:{{ .Values.global.modelCache.jobNamespace }}
+    apiGroup: rbac.authorization.k8s.io
+  - kind: Group
+    name: system:serviceaccounts:aiq-model-storage
+    apiGroup: rbac.authorization.k8s.io

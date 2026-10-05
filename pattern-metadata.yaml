@@ -56,6 +56,8 @@ external_requirements:
     PROFILE=bf16 serves BF16 on one GPU that can hold the weights and requires
     GPU_INSTANCE_TYPE or GPU_VM_SIZE. The pattern also installs OpenShift AI and the GPU Operator.
     Nemotron 3 Ultra (clarifier and deep research) uses the NVIDIA API Catalog
-    (NVIDIA_API_KEY). Tavily is optional for web research. Postgres and the vLLM
-    model-cache PVC use the cluster default StorageClass unless you set
-    global.storageClass in values-global.yaml.
+    (NVIDIA_API_KEY). Tavily is optional for web research. Postgres and RustFS
+    require persistent storage. Configure RustFS under rustfs.storageclass;
+    each labeled serving node also requires prepared local cache disk at
+    /var/lib/kserve/models. Distributed serving requires multiple GPU nodes,
+    with network/device prerequisites provided by the platform.

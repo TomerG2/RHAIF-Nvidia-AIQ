@@ -206,7 +206,7 @@ def test_pattern_values_target_umbrella_chart_and_serving_stack():
     assert values_global["global"]["hardwareProfile"] == "nvfp4"
     assert values_global["global"]["model"]["hfRepo"] == HF_REPO
     assert values_global["global"]["model"]["servedName"] == SERVED_MODEL_NAME
-    assert values_global["global"]["rhoai"]["version"] == "3.5"
+    assert values_global["global"]["rhoai"]["version"] == "3.5.1"
     assert values_global["global"]["rhoai"]["vllmImage"].startswith(
         "registry.redhat.io/rhaii/vllm-cuda-rhel9@sha256:"
     )
@@ -268,50 +268,23 @@ def test_pattern_values_target_umbrella_chart_and_serving_stack():
         assert (REPO_ROOT / "profiles" / f"{profile_name}.yaml").is_file()
 
 
-def test_vllm_chart_renders_served_name_hf_repo_and_model_cache_pvc(tmp_path: Path):
+def test_vllm_chart_uses_published_cache_and_retains_legacy_pvc(tmp_path: Path):
     manifests = _render_vllm_chart(tmp_path)
-    kinds = {manifest["kind"] for manifest in manifests}
-    assert "InferenceService" in kinds
-    assert "ServingRuntime" in kinds
-    assert "PersistentVolumeClaim" in kinds
-    assert "Route" not in kinds
-    assert "HardwareProfile" not in kinds
-
     pvc = next(m for m in manifests if m["kind"] == "PersistentVolumeClaim")
     assert pvc["spec"]["resources"]["requests"]["storage"] == "80Gi"
-    assert "storageClassName" not in pvc["spec"]
-
-    inference_service = next(m for m in manifests if m["kind"] == "InferenceService")
-    assert inference_service["metadata"]["name"] == "vllm-inference-service"
-
-    serving_runtime = next(m for m in manifests if m["kind"] == "ServingRuntime")
-    assert serving_runtime["metadata"]["name"] == "vllm-inference-service"
-    container = serving_runtime["spec"]["containers"][0]
-    args = container["args"]
-    env = {item["name"]: item.get("value") for item in container["env"]}
-    hf_token_ref = next(item for item in container["env"] if item["name"] == "HF_TOKEN")
-    volume_names = {volume["name"] for volume in serving_runtime["spec"]["volumes"]}
-
-    assert env["MODEL_ID"] == HF_REPO
-    assert container["image"].startswith("registry.redhat.io/rhaii/vllm-cuda-rhel9@sha256:")
-    assert container["command"] == ["python", "-m", "vllm.entrypoints.openai.api_server"]
-    assert f"--served-model-name={SERVED_MODEL_NAME}" in args
-    assert "--quantization=compressed-tensors" not in args
-    assert hf_token_ref["valueFrom"]["secretKeyRef"] == {
-        "name": "huggingface-secret",
-        "key": "hftoken",
-        "optional": True,
-    }
-    assert "model-cache" in volume_names
-
-    init_env = {
-        item["name"]: item.get("value")
-        for item in inference_service["spec"]["predictor"]["initContainers"][0]["env"]
-    }
-    assert init_env["MODEL_ID"] == HF_REPO
-    init_mounts = inference_service["spec"]["predictor"]["initContainers"][0]["volumeMounts"]
-    assert init_mounts[0]["name"] == "model-cache"
-    assert "volumes" not in inference_service["spec"]["predictor"]
+    assert "Prune=false" in pvc["metadata"]["annotations"]["argocd.argoproj.io/sync-options"]
+    service = next(m for m in manifests if m["kind"] == "InferenceService")
+    cache = next(m for m in manifests if m["kind"] == "LocalModelCache")
+    runtime = next(m for m in manifests if m["kind"] == "ServingRuntime")
+    assert service["spec"]["predictor"]["model"]["storageUri"] == cache["spec"]["sourceModelUri"]
+    assert HF_REPO in cache["spec"]["sourceModelUri"]
+    assert "initContainers" not in service["spec"]["predictor"]
+    assert all("persistentVolumeClaim" not in v for v in runtime["spec"]["volumes"])
+    container = runtime["spec"]["containers"][0]
+    assert f"--served-model-name={SERVED_MODEL_NAME}" in container["args"]
+    assert "--model=/mnt/models" in container["args"]
+    assert all(e["name"] != "HF_TOKEN" for e in container["env"])
+    assert next(e["value"] for e in container["env"] if e["name"] == "HF_HUB_OFFLINE") == "1"
 
 
 def test_openshift_overlay_mounts_hybrid_config_and_disables_nginx_ingress():
@@ -407,7 +380,7 @@ def test_bf16_profile_renders_catalog_limits():
     env = {item["name"]: item.get("value") for item in container["env"]}
     joined_args = " ".join(args)
 
-    assert env["MODEL_ID"] == BF16_HF_REPO
+    assert BF16_HF_REPO in next(m for m in manifests if m["kind"] == "LocalModelCache")["spec"]["sourceModelUri"]
     assert f"--served-model-name={BF16_SERVED_MODEL_NAME}" in args
     assert "--max-model-len=65536" in args
     assert "--max-num-batched-tokens=32768" in args
@@ -448,7 +421,7 @@ def test_bf16_tp4_profile_splits_across_four_gpus():
     env = {item["name"]: item.get("value") for item in container["env"]}
     joined_args = " ".join(args)
 
-    assert env["MODEL_ID"] == BF16_HF_REPO
+    assert BF16_HF_REPO in next(m for m in manifests if m["kind"] == "LocalModelCache")["spec"]["sourceModelUri"]
     assert f"--served-model-name={BF16_SERVED_MODEL_NAME}" in args
     assert "--tensor-parallel-size=4" in args
     assert "--max-model-len=65536" in args

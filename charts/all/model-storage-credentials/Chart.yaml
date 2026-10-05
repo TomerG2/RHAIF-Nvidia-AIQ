@@ -1,0 +1,3 @@
+apiVersion: v2
+name: aiq-storage-credentials
+version: 0.1.0

@@ -19,6 +19,12 @@ It does not contain AI-Q application source. Runtime images come from NGC
 Profile: intent + shallow research on in-cluster vLLM; clarifier + deep research on
 NVIDIA API Catalog (Nemotron 3 Ultra).
 
+Model artifacts are published to a TLS-protected RustFS store and cached on each
+selected serving node. Profiles support one-node serving, independent replicas,
+and configurable tensor/pipeline distribution through LeaderWorkerSet. See
+[model storage and serving](docs/source/deployment/model-storage-and-serving.md)
+for disk preparation, topology settings, migration, rollback, and validation status.
+
 ## Deploying the demo
 
 Prerequisites: OpenShift cluster with `oc` logged in (cluster-admin or equivalent);
@@ -38,6 +44,9 @@ cp values-secret.yaml.template ~/values-secret-aiq.yaml
 
 See [GPU_provisioning.md](GPU_provisioning.md) for AWS/Azure MachineSet steps and
 for labeling an existing GPU node.
+Prepare local cache disk and apply the cache-node label described in the
+[storage prerequisites](docs/source/deployment/model-storage-and-serving.md#prepare-the-platform)
+before installation.
 
 ### Deploy the pattern
 
@@ -56,6 +65,7 @@ for labeling an existing GPU node.
 ```bash
 oc wait --for=condition=Ready inferenceservice/vllm-inference-service -n aiq-inference --timeout=45m
 oc get route -n aiq
+python scripts/model-cache.py status
 ```
 
 Open the frontend Route and try a shallow research query. For upgrade, uninstall,

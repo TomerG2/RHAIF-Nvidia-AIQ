@@ -15,14 +15,63 @@ global:
   hardwareProfile: nvfp4
   model:
     hfRepo: nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4
+    revision: bee7596271d1495f6992ae224aefde4410e816b8
+    size: 80Gi
     servedName: nemotron-3.5-lightning-30b-a3b
-  # Hybrid Lightning requires RHOAI 3.5+ (vLLM 0.24+). Image digest matches rhods-operator.3.5.0.
+  # Hybrid Lightning requires RHOAI 3.5+ (vLLM 0.24+). Image digest matches rhods-operator.3.5.1.
   rhoai:
-    version: "3.5"
-    vllmImage: registry.redhat.io/rhaii/vllm-cuda-rhel9@sha256:ba060ec145e1b7ac3a3b25b89fc75f7d146746156990ff5858235eaa9d158e32
+    version: "3.5.1"
+    vllmImage: registry.redhat.io/rhaii/vllm-cuda-rhel9@sha256:c056e61672b6aea489ad5dde0bd2f8497230f5333e87f7cf6c494eba3bfdc808
   inference:
     namespace: aiq-inference
-  # Optional StorageClass for the vLLM model-cache PVC (omit or empty = cluster default).
+  # Shared by publication, cache preparation, serving, and the AI-Q endpoint.
+  serving:
+    replicas: 1
+    nodesPerReplica: 1
+    gpusPerNode: 1
+    tensorParallel: 1
+    pipelineParallel: 1
+    runtimeImage: "" # empty uses the RHOAI baseline digest above
+    cpu: "4"
+    memory: 24Gi
+    shmSize: 2Gi
+    startupSeconds: 3600
+    nodeSelector: {}
+    topologyKey: kubernetes.io/hostname
+    tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      - key: odh-notebook
+        operator: Exists
+        effect: NoSchedule
+    networkAttachments: [] # namespace/name references to existing NADs
+    rdmaResources: {} # e.g. rdma/roce: "1"; requested on EVERY leader/worker
+    ncclEnv: {}
+    ipcLock: false # requires a platform-provided SCC for the serving SA
+    allowedClientNamespaces: [aiq, openshift-monitoring, openshift-user-workload-monitoring]
+    secondaryNetworkIsolated: false # attest dedicated/isolated fabric when using multi-node NADs
+  modelStore:
+    endpoint: https://rustfs-svc.aiq-model-storage.svc.cluster.local:9000
+    bucket: aiq-models
+    prefix: snapshots
+    region: us-east-1
+    caConfigMap: aiq-model-store-ca
+  modelTools:
+    # OpenShift ImageStream imports this exact public image with PreserveOriginal.
+    # Dependencies are baked into the image; scripts are versioned ConfigMaps.
+    upstreamImage: docker.io/kserve/storage-initializer@sha256:2f0c1859bc1eac0504190fb4047a13206e1c26692463b5ccdc382fa694e07db8
+    image: image-registry.openshift-image-registry.svc:5000/aiq-inference/aiq-model-tools@sha256:2f0c1859bc1eac0504190fb4047a13206e1c26692463b5ccdc382fa694e07db8
+    transferConcurrency: 4
+    diskReserveBytes: 1073741824
+  modelCache:
+    nodeSelector:
+      aiq.rhai.redhat.com/model-cache: "true"
+    capacity: 200Gi
+    nodeGroup: aiq-models
+    jobNamespace: kserve-localmodel-jobs
+    retainedRevisions: [] # entries: {hfRepo, revision, size}; retain rollback copies
+  # Optional StorageClass for the retained legacy PVC.
   storageClass: ""
 main:
   variant: nvfp4
@@ -41,6 +90,14 @@ clusterGroup:
       labels:
         opendatahub.io/dashboard: "true"
         modelmesh-enabled: "false"
+    aiq-model-storage: {}
+    kserve-localmodel-jobs: {}
+    openshift-lws-operator:
+      operatorGroup: true
+      targetNamespaces: []
+    cert-manager-operator:
+      operatorGroup: true
+      targetNamespaces: []
     vault: {}
     golang-external-secrets: {}
     redhat-ods-operator:
@@ -59,6 +116,16 @@ clusterGroup:
     rhoai:
       name: rhods-operator
       namespace: redhat-ods-operator
+      channel: stable-3.5
+      csv: rhods-operator.3.5.1
+    leader-worker-set:
+      name: leader-worker-set
+      namespace: openshift-lws-operator
+      channel: stable-v1.0
+    cert-manager:
+      name: openshift-cert-manager-operator
+      namespace: cert-manager-operator
+      channel: stable-v1
   applications:
     vault:
       name: vault
@@ -88,6 +155,58 @@ clusterGroup:
       annotations:
         argocd.argoproj.io/sync-wave: "5"
         argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    rustfs-credentials:
+      name: rustfs-credentials
+      namespace: aiq-model-storage
+      path: charts/all/model-storage-credentials
+      ignoreDifferences:
+        - group: ""
+          kind: ConfigMap
+          jsonPointers: [/data]
+      syncPolicy:
+        automated:
+          selfHeal: true
+        syncOptions: [RespectIgnoreDifferences=true]
+        retry:
+          limit: 20
+      annotations:
+        argocd.argoproj.io/sync-wave: "5"
+        argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    model-tools:
+      name: model-tools
+      namespace: aiq-inference
+      path: charts/all/model-tools
+      annotations:
+        argocd.argoproj.io/sync-wave: "5"
+    rustfs:
+      name: rustfs
+      namespace: aiq-model-storage
+      path: charts/all/rustfs
+      ignoreDifferences:
+        - group: apps
+          kind: Deployment
+          name: rustfs
+          jsonPointers: [/spec/template/metadata/annotations/aiq.rhai.redhat.com~1tls-fingerprint]
+        - group: apps
+          kind: StatefulSet
+          name: rustfs
+          jsonPointers: [/spec/template/metadata/annotations/aiq.rhai.redhat.com~1tls-fingerprint]
+      annotations:
+        argocd.argoproj.io/sync-wave: "16"
+        argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+      syncPolicy:
+        automated:
+          selfHeal: true
+        syncOptions: [RespectIgnoreDifferences=true]
+        retry:
+          limit: 20
+    leader-worker-set-config:
+      name: leader-worker-set-config
+      namespace: openshift-lws-operator
+      path: charts/all/lws
+      annotations:
+        argocd.argoproj.io/sync-wave: "15"
+        argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     nfd-config:
       name: nfd-config
       namespace: openshift-nfd
@@ -104,6 +223,8 @@ clusterGroup:
       name: openshift-ai
       namespace: redhat-ods-operator
       path: charts/all/rhods
+      extraValueFiles:
+        - '/profiles/{{ $.Values.global.hardwareProfile }}.yaml'
       annotations:
         argocd.argoproj.io/sync-wave: "15"
     vllm-inference-service:
@@ -115,6 +236,9 @@ clusterGroup:
       syncPolicy:
         automated:
           selfHeal: true
+          prune: true
+        syncOptions:
+          - PruneLast=true
         retry:
           limit: 20
       extraValueFiles:
@@ -136,3 +260,4 @@ clusterGroup:
       extraValueFiles:
         - /overrides/values-openshift-base.yaml
         - /overrides/values-openshift-hybrid-lightning.yaml
+        - '/profiles/{{ $.Values.global.hardwareProfile }}.yaml'

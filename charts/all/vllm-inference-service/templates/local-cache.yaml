@@ -1,0 +1,100 @@
+apiVersion: serving.kserve.io/v1alpha1
+kind: LocalModelNodeGroup
+metadata:
+  name: {{ .Values.global.modelCache.nodeGroup }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true,Prune=false,Delete=false
+spec:
+  storageLimit: {{ .Values.global.modelCache.capacity }}
+  persistentVolumeSpec:
+    accessModes: [ReadWriteOnce]
+    capacity: {storage: {{ .Values.global.modelCache.capacity }}}
+    local: {path: /var/lib/kserve/models}
+    nodeAffinity:
+      required:
+        nodeSelectorTerms:
+          - matchExpressions:
+              {{- range $key, $value := .Values.global.modelCache.nodeSelector }}
+              - {key: {{ $key | quote }}, operator: In, values: [{{ $value | quote }}]}
+              {{- end }}
+    persistentVolumeReclaimPolicy: Retain
+    storageClassName: ""
+    volumeMode: Filesystem
+  persistentVolumeClaimSpec:
+    accessModes: [ReadWriteOnce]
+    resources:
+      requests: {storage: {{ .Values.global.modelCache.capacity }}}
+    storageClassName: ""
+    volumeMode: Filesystem
+---
+apiVersion: serving.kserve.io/v1alpha1
+kind: ClusterStorageContainer
+metadata:
+  name: aiq-verified-model-download
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  workloadType: localModelDownloadJob
+  supportedUriFormats:
+    - prefix: {{ printf "s3://%s/%s/" .Values.global.modelStore.bucket .Values.global.modelStore.prefix | quote }}
+  container:
+    name: storage-initializer
+    image: {{ .Values.global.modelTools.image | quote }}
+    command:
+      - python
+      - -c
+      - |
+        {{- .Files.Get "files/artifact_store.py" | nindent 8 }}
+    env:
+      - name: S3_ENDPOINT
+        value: {{ .Values.global.modelStore.endpoint | quote }}
+      - name: AWS_DEFAULT_REGION
+        value: {{ .Values.global.modelStore.region | quote }}
+      - name: AWS_CA_BUNDLE_CONFIGMAP
+        value: {{ .Values.global.modelStore.caConfigMap | quote }}
+      - name: AWS_CA_BUNDLE
+        value: /etc/ssl/custom-certs/ca.crt
+      - name: TRANSFER_CONCURRENCY
+        value: {{ .Values.global.modelTools.transferConcurrency | quote }}
+      - name: DISK_RESERVE_BYTES
+        value: {{ .Values.global.modelTools.diskReserveBytes | quote }}
+    resources:
+      requests: {cpu: "1", memory: 512Mi}
+      limits: {cpu: "4", memory: 2Gi}
+---
+# If admission misses the local cache, fail visibly instead of silently staging
+# another full model copy in every serving pod's ephemeral storage.
+apiVersion: serving.kserve.io/v1alpha1
+kind: ClusterStorageContainer
+metadata:
+  name: aiq-require-local-cache
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  workloadType: initContainer
+  supportedUriFormats:
+    - prefix: {{ printf "s3://%s/%s/" .Values.global.modelStore.bucket .Values.global.modelStore.prefix | quote }}
+  container:
+    name: storage-initializer
+    image: {{ .Values.global.modelTools.image | quote }}
+    command: [python, -c, 'raise RuntimeError("AI-Q requires a ready LocalModelCache; inspect cache admission and URI matching")']
+{{- $revisions := prepend .Values.global.modelCache.retainedRevisions .Values.global.model }}
+{{- range $model := $revisions }}
+{{- $uri := printf "s3://%s/%s/%s/%s" $.Values.global.modelStore.bucket $.Values.global.modelStore.prefix $model.hfRepo $model.revision }}
+---
+apiVersion: serving.kserve.io/v1alpha1
+kind: LocalModelCache
+metadata:
+  name: aiq-{{ $uri | sha256sum | trunc 20 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true,Prune=false,Delete=false
+spec:
+  sourceModelUri: {{ $uri | quote }}
+  modelSize: {{ $model.size }}
+  nodeGroups: [{{ $.Values.global.modelCache.nodeGroup }}]
+  serviceAccountName: aiq-model-reader
+{{- end }}

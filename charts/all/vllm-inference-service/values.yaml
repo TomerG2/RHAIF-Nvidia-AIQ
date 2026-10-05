@@ -1,90 +1,46 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, Red Hat, Inc.
-# SPDX-License-Identifier: Apache-2.0
-# Model IDs come from values-global.yaml global.model.{hfRepo,servedName}.
-# Args below match profiles/nvfp4.yaml. Other serving profiles override them via extraValueFiles.
-
-modelCache:
-  enabled: true
-  size: 80Gi
-
+# Shared topology and runtime image: values-global.yaml global.serving.
 vllmInferenceService:
   annotations:
     openshift.io/display-name: vllm-inference
     serving.kserve.io/deploymentMode: Standard
-    argocd.argoproj.io/sync-wave: "20"
+    argocd.argoproj.io/sync-wave: '20'
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
-
-  predictor:
-    annotations:
-      serving.knative.dev/progress-deadline: 30m
-    replicas: 1
-    resources:
-      limits:
-        nvidia.com/gpu: '1'
-    affinity:
-      nodeAffinity:
-        requiredDuringSchedulingIgnoredDuringExecution:
-          nodeSelectorTerms:
-            - matchExpressions:
-                - key: nvidia.com/gpu.present
-                  operator: In
-                  values: ["true"]
-
-  tolerations:
-    - effect: NoSchedule
-      key: odh-notebook
-      operator: Exists
-
 vllmServingRuntime:
   annotations:
     opendatahub.io/accelerator-name: nvidia-gpu
     opendatahub.io/apiProtocol: REST
     opendatahub.io/recommended-accelerators: '["nvidia.com/gpu"]'
     openshift.io/display-name: vllm-inference
-    argocd.argoproj.io/sync-wave: "20"
+    argocd.argoproj.io/sync-wave: '20'
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
-
-  # Bootstrap profile for a single NVIDIA GPU (g6/g7e). NVFP4 quantization comes from
-  # config.json on the checkpoint — do not pass --quantization.
-  # Args align with the HF/NVIDIA Nemotron 3.5 Lightning NVFP4 vLLM recipe.
   args:
-    - "--model=/cache/models"
-    - "--distributed-executor-backend=mp"
-    - "--max-model-len=4096"
-    - "--max-num-batched-tokens=8192"
-    - "--dtype=auto"
-    - "--gpu-memory-utilization"
-    - "0.90"
-    - "--enforce-eager"
-    - "--moe-backend=marlin"
-    - "--kv-cache-dtype=fp8"
-    - "--enable-prefix-caching"
-    - "--mamba-backend=flashinfer"
-    - "--mamba-cache-mode=align"
-    - "--reasoning-parser=nemotron_v3"
-    # qwen3_coder is NVIDIA's vLLM tool parser for Nemotron (not a Qwen model).
-    - "--enable-auto-tool-choice"
-    - "--tool-call-parser"
-    - "qwen3_coder"
-
-  command:
-    - python
-    - '-m'
-    - vllm.entrypoints.openai.api_server
-
-  # Prefer global.rhoai.vllmImage (RHOAI 3.5+ CUDA runtime). Override image.ref to pin another digest.
-  image:
-    ref: ""
-    repository: registry.redhat.io/rhaii/vllm-cuda-rhel9
-    tag: latest
-
-  port: 8080
-
-  initContainer:
-    image: registry.access.redhat.com/ubi9/python-39
-
+  - --max-model-len=4096
+  - --max-num-batched-tokens=8192
+  - --dtype=auto
+  - --gpu-memory-utilization
+  - '0.90'
+  - --enforce-eager
+  - --moe-backend=marlin
+  - --kv-cache-dtype=fp8
+  - --enable-prefix-caching
+  - --mamba-backend=flashinfer
+  - --mamba-cache-mode=align
+  - --reasoning-parser=nemotron_v3
+  - --enable-auto-tool-choice
+  - --tool-call-parser
+  - qwen3_coder
 route:
   enabled: false
-
 hardwareProfile:
   enabled: false
+migration:
+  retainLegacyPVC: true
+  legacyPVCSize: "" # Set to the EXISTING claim size when switching profiles.
+  replaceBackend: true # Retire the opposite backend only after publication/cache gates.
+publication:
+  scratchSize: 80Gi
+  timeoutSeconds: 14400
+gate:
+  timeoutSeconds: 14400
+monitoring:
+  enabled: true

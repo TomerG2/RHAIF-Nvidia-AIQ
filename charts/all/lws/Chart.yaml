@@ -1,0 +1,3 @@
+apiVersion: v2
+name: aiq-leader-worker-set
+version: 0.1.0

@@ -92,7 +92,7 @@ Phase 0 is complete when at least one GPU worker is `Ready`, labeled `node-role.
 
 See [GPU_provisioning.md](https://github.com/validatedpatterns-sandbox/RHAIF-Nvidia-AIQ/blob/main/GPU_provisioning.md) for Azure defaults, manual MachineSet, bare-metal, and verification steps. Clusters without Machine API must add GPU nodes outside GitOps.
 
-The default `nvfp4` profile uses **1× `g6.2xlarge`** (NVIDIA L4, 24 GiB VRAM) with the **NVFP4** checkpoint and an **80Gi** model-cache PVC. The `bf16` profile uses the **BF16** checkpoint and a **150Gi** model-cache PVC. Set `global.storageClass` in `values-global.yaml` when the cluster default is not suitable. On-cluster checks for `bf16` are listed in [TODO.md](https://github.com/validatedpatterns-sandbox/RHAIF-Nvidia-AIQ/blob/main/TODO.md).
+The default `nvfp4` profile uses **1× `g6.2xlarge`** (NVIDIA L4, 24 GiB VRAM) with the **NVFP4** checkpoint. RustFS stores the complete pinned snapshot; each serving node has its own warm cache. Model reservations are **80Gi** for NVFP4 and **150Gi** for BF16, with cache capacities of **200Gi** and **350Gi** respectively to accommodate rollback. Prepare local disk and label eligible nodes before installation. See [model storage and serving](model-storage-and-serving.md) for prerequisites, replica/distributed settings, storage classes, and retained-PVC migration.
 
 Default destination namespace is `aiq` (application) and `aiq-inference` (vLLM). Override `clusterGroup.namespaces` and each application's `namespace` in `values-global.yaml` only if your cluster requires different project names.
 
@@ -105,7 +105,7 @@ cp values-secret.yaml.template ~/values-secret-aiq.yaml
 # Set NVIDIA_API_KEY. Leave DB_USER_PASSWORD unset so Vault generates it once.
 ```
 
-`~/values-secret-aiq.yaml` is the operator-facing secret file. `backingStore: vault` must match `global.secretStore.backend`. `make load-secrets` writes fields to Vault KV `secret/data/hub/<secret name>`. The `hub` prefix is the ansible `vault_hub` default. Do not set `vaultPrefixes` on secret entries. Two `eso-bindings` Argo applications then materialize Kubernetes Secrets of the same names in `aiq` and `aiq-inference`.
+`~/values-secret-aiq.yaml` is the operator-facing secret file. `backingStore: vault` must match `global.secretStore.backend`. `make load-secrets` writes fields to Vault KV `secret/data/hub/<secret name>`. The `hub` prefix is the ansible `vault_hub` default. Do not set `vaultPrefixes` on secret entries. ESO materializes application/Hugging Face credentials and scoped RustFS administrator, model-publisher, and model-reader credentials in the required namespaces. Leave the new storage passwords unset so Vault generates them once.
 
 | Field | Purpose |
 |---|---|
@@ -143,10 +143,11 @@ From the repository root, on the branch Argo CD should track:
 wave -30: vault (HashiCorp Vault)
 wave -20: golang-external-secrets (External Secrets Operator and ClusterSecretStore vault-backend)
 wave -1:  aiq-workflow-config (workflow ConfigMap)
-wave 5:   eso-bindings (aiq-credentials in aiq, huggingface-secret in aiq-inference)
+wave 5:   ESO application/storage credentials and internal model-tools image mirror
 wave 10:  nfd-config, nvidia-config (GPU operator enablement)
-wave 15:  openshift-ai (DataScienceCluster, KServe serving only; requires RHOAI 3.5+)
-wave 20:  vllm-inference-service (Nemotron Lightning on RHOAI vLLM CUDA runtime)
+wave 15:  openshift-ai (RHOAI 3.5.1, KServe and node caches), LeaderWorkerSet operand
+wave 16:  rustfs (TLS, persistent storage, bucket and scoped IAM bootstrap)
+wave 20:  vllm-inference-service (prerequisites, publication, cache readiness, serving)
 wave 30:  aiq (umbrella Helm chart)
 ```
 

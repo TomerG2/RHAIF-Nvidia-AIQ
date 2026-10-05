@@ -1,0 +1,28 @@
+# Explicit storage availability overlay: four storage nodes, one drive each.
+# These labels are independent of the GPU/cache node labels.
+rustfs:
+  replicaCount: 4
+  drivesPerNode: 1
+  mode:
+    standalone:
+      enabled: false
+    distributed:
+      enabled: true
+  config:
+    rustfs:
+      ec:
+        storage_class_standard: EC:2
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: aiq.rhai.redhat.com/model-storage
+                operator: In
+                values: ["true"]
+    podAntiAffinity:
+      enabled: true
+      topologyKey: kubernetes.io/hostname
+  pdb:
+    create: true
+    maxUnavailable: 1

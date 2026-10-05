@@ -57,6 +57,10 @@ spec:
         {{- $datadogAnnotations = dict $annotationKey $version }}
       {{- end }}
       {{- $allAnnotations := mustMerge (deepCopy $appAnnotations) (deepCopy $defaultAnnotations) (deepCopy $datadogAnnotations) }}
+      {{- $shared := $.Values.global | default dict }}
+      {{- if and (eq $appName "backend") $shared.model }}
+      {{- $_ := set $allAnnotations "aiq.rhai.redhat.com/serving-config" (printf "%s%s" ($shared.model | toJson) ($shared.serving | toJson) | sha256sum) }}
+      {{- end }}
       {{- if $allAnnotations }}
       annotations:
         {{- toYaml $allAnnotations | nindent 8 }}

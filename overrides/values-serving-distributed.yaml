@@ -1,0 +1,17 @@
+# Example only; not a validated B200 result. Select a model that supports TP=8/PP=4.
+global:
+  serving:
+    replicas: 1
+    nodesPerReplica: 4
+    gpusPerNode: 8
+    tensorParallel: 8
+    pipelineParallel: 4
+    cpu: "32"
+    memory: 256Gi
+    shmSize: 32Gi
+    nodeSelector:
+      nvidia.com/gpu.product: NVIDIA-B200
+    ncclEnv:
+      NCCL_DEBUG: INFO
+    # Set networkAttachments, rdmaResources, NCCL interfaces, and ipcLock to
+    # match the actual platform. TCP works without RDMA, at lower throughput.

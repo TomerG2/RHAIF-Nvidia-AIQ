@@ -17,7 +17,7 @@ spec:
     termination: edge
   to:
     kind: Service
-    name: {{ printf "%s-predictor" (include "vllm-inference-service.fullname" .) }}
+    name: {{ include "vllm-inference-service.fullname" . }}-{{ if gt (int .Values.global.serving.nodesPerReplica) 1 }}distributed{{ else }}predictor{{ end }}
     weight: 100
   wildcardPolicy: None
 {{- end }}

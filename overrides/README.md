@@ -12,7 +12,8 @@ in `values-global.yaml`.
 | Serving profile | `variants/<name>/values-<name>.yaml` and `profiles/<name>.yaml` | GPU, checkpoint, vLLM args, shallow Lightning token budgets |
 | OpenShift overlays | `overrides/values-openshift-*.yaml` | Platform tweaks for the AI-Q umbrella chart (Route, PVC, workflow mount) |
 
-These overlays only adjust how the published AI-Q images run on OpenShift.
+The `values-openshift-*` overlays adjust how the published AI-Q images run on
+OpenShift. Additional topology/storage examples are described below.
 
 ## Overlay files
 
@@ -22,6 +23,15 @@ These overlays only adjust how the published AI-Q images run on OpenShift.
 | `values-openshift-hybrid-lightning.yaml` | Mount `config_hybrid_lightning.yml` (in-cluster vLLM + NVIDIA API Ultra) |
 
 Helm list values replace rather than merge. Always apply base plus the hybrid overlay.
+
+`values-serving-replicated.yaml` selects independent replicas;
+`values-serving-distributed.yaml` illustrates four nodes with eight GPUs each.
+Apply shared serving overrides after the profile for the serving, workflow,
+AI-Q, and OpenShift AI applications. `values-rustfs-distributed.yaml` selects
+four storage nodes independently and applies only to the RustFS application.
+See [the serving guide](../docs/source/deployment/model-storage-and-serving.md)
+for prerequisites and the exact GitOps configuration path. These examples do
+not provision GPU hardware or physical storage/network infrastructure.
 
 ## Credentials
 

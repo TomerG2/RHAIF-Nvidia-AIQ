@@ -1,0 +1,5 @@
+global:
+  modelCache:
+    capacity: 200Gi
+    nodeSelector:
+      aiq.rhai.redhat.com/model-cache: "true"

@@ -1,0 +1,118 @@
+{{- if gt (int .Values.global.serving.nodesPerReplica) 1 }}
+apiVersion: serving.kserve.io/v1alpha2
+kind: LLMInferenceServiceConfig
+metadata:
+  name: aiq-tensor-pipeline
+  annotations:
+    argocd.argoproj.io/sync-wave: "19"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  model: {uri: ""}
+  template:
+    {{- include "aiq.distributedPod" (dict "root" . "worker" false) | nindent 4 }}
+  worker:
+    {{- include "aiq.distributedPod" (dict "root" . "worker" true) | nindent 4 }}
+---
+apiVersion: serving.kserve.io/v1alpha2
+kind: LLMInferenceService
+metadata:
+  name: {{ include "vllm-inference-service.fullname" . }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  baseRefs:
+    - name: aiq-tensor-pipeline
+  model:
+    uri: {{ include "aiq.uri" . | quote }}
+    name: {{ .Values.global.model.servedName | quote }}
+  replicas: {{ .Values.global.serving.replicas }}
+  # RHOAI 3.5.1 derives LWS size from pipeline when data/dataLocal are absent.
+  parallelism:
+    tensor: {{ .Values.global.serving.tensorParallel }}
+    pipeline: {{ .Values.global.serving.pipelineParallel }}
+  labels:
+    aiq.rhai.redhat.com/serving: {{ include "vllm-inference-service.fullname" . }}
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    {{- if .Values.global.serving.networkAttachments }}
+    k8s.v1.cni.cncf.io/networks: {{ join "," .Values.global.serving.networkAttachments | quote }}
+    {{- end }}
+  # No router section: a cluster Service routes to ready leaders below.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "vllm-inference-service.fullname" . }}-distributed
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+spec:
+  selector:
+    aiq.rhai.redhat.com/serving: {{ include "vllm-inference-service.fullname" . }}
+    leaderworkerset.sigs.k8s.io/worker-index: "0"
+  ports:
+    - {name: http, port: 80, targetPort: 8080}
+{{- end }}
+
+{{- define "aiq.distributedPod" -}}
+{{- $root := .root -}}
+serviceAccountName: aiq-model-reader
+automountServiceAccountToken: false
+terminationGracePeriodSeconds: 60
+{{ include "aiq.placement" $root }}
+containers:
+  - name: main
+    image: {{ include "aiq.runtimeImage" $root | quote }}
+    # Fully replaces the supplied data-parallel command on both leader and worker.
+    command:
+      - python
+      - -c
+      - |
+        {{- $root.Files.Get "files/distributed.py" | nindent 8 }}
+    args:
+      {{- toYaml $root.Values.vllmServingRuntime.args | nindent 6 }}
+    env:
+      {{- include "aiq.runtimeEnv" $root | nindent 6 }}
+      - {name: AIQ_NODES, value: {{ $root.Values.global.serving.nodesPerReplica | quote }}}
+      - {name: AIQ_GPUS, value: {{ $root.Values.global.serving.gpusPerNode | quote }}}
+      - {name: AIQ_TP, value: {{ $root.Values.global.serving.tensorParallel | quote }}}
+      - {name: AIQ_PP, value: {{ $root.Values.global.serving.pipelineParallel | quote }}}
+      - {name: AIQ_SERVED_NAME, value: {{ $root.Values.global.model.servedName | quote }}}
+      - {name: AIQ_MODEL_URI, value: {{ include "aiq.uri" $root | quote }}}
+    resources:
+      {{- include "aiq.resources" $root | nindent 6 }}
+    securityContext:
+      allowPrivilegeEscalation: false
+      runAsNonRoot: true
+      capabilities:
+        drop: [ALL]
+        {{- if $root.Values.global.serving.ipcLock }}
+        add: [IPC_LOCK]
+        {{- end }}
+      seccompProfile: {type: RuntimeDefault}
+    {{- if not .worker }}
+    ports:
+      - {name: http, containerPort: 8080}
+    {{- include "aiq.probes" $root | nindent 4 }}
+    {{- else }}
+    # A headless worker is ready only after its replica's leader can serve.
+    startupProbe:
+      exec:
+        command: [python, -c, 'import os,urllib.request; urllib.request.urlopen("http://"+os.environ["LWS_LEADER_ADDRESS"]+":8080/health",timeout=3)']
+      periodSeconds: 10
+      failureThreshold: {{ div (int $root.Values.global.serving.startupSeconds) 10 }}
+    readinessProbe:
+      exec:
+        command: [python, -c, 'import os,urllib.request; urllib.request.urlopen("http://"+os.environ["LWS_LEADER_ADDRESS"]+":8080/health",timeout=3)']
+      periodSeconds: 5
+    {{- end }}
+    volumeMounts:
+      - {name: shm, mountPath: /dev/shm}
+      - {name: scratch, mountPath: /tmp}
+volumes:
+  - name: shm
+    emptyDir: {medium: Memory, sizeLimit: {{ $root.Values.global.serving.shmSize }}}
+  - name: scratch
+    emptyDir: {}
+{{- end -}}

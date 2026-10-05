@@ -1,17 +1,19 @@
-{{- if .Values.modelCache.enabled }}
+{{- if .Values.migration.retainLegacyPVC }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: {{ include "vllm-inference-service.fullname" . }}-model-cache
   annotations:
-    argocd.argoproj.io/sync-wave: "20"
-    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/ignore-healthcheck: "true"
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    helm.sh/resource-policy: keep
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: {{ .Values.modelCache.size }}
+      storage: {{ default .Values.global.model.size .Values.migration.legacyPVCSize }}
   {{- with .Values.global.storageClass }}
   storageClassName: {{ . | quote }}
   {{- end }}

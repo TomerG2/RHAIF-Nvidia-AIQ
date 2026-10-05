@@ -1,42 +1,32 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, Red Hat, Inc.
-# SPDX-License-Identifier: Apache-2.0
-#
-# Non-quantized BF16 weights on one GPU (not NVFP4, not FP16).
-# Needs a card that can hold the ~60 GB weights (example: A100 or H100 80 GiB).
-# NVIDIA validates about 256K context for this checkpoint on one H100 80GB.
-# Catalog parity uses a smaller window: max-model-len 65536 and shallow max_tokens 32768.
-# Do not pass --quantization; vLLM reads dtype from the checkpoint.
-# Omit vLLM 0.27-only 1x H100 flags (mamba-ssm-cache-dtype, stochastic Mamba rounding);
-# this pattern's RHOAI 3.5 runtime is vLLM 0.24+.
-# If the runtime rejects max-num-batched-tokens below max-model-len, raise it to 65536.
+# Serving preset; topology and resource arithmetic live in global.serving.
 global:
   model:
     hfRepo: nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16
     servedName: nemotron-3.5-lightning-30b-a3b-bf16
-modelCache:
-  size: 150Gi
-vllmInferenceService:
-  predictor:
-    resources:
-      limits:
-        nvidia.com/gpu: "1"
+    revision: a9904d24bcc1d289a1950fa9d2b978c47cf903b9
+    size: 150Gi
+  serving:
+    gpusPerNode: 1
+    tensorParallel: 1
+    cpu: "8"
+    memory: 48Gi
+    shmSize: 4Gi
+  modelCache:
+    capacity: 350Gi
 vllmServingRuntime:
   args:
-    - "--model=/cache/models"
-    - "--distributed-executor-backend=mp"
-    - "--max-model-len=65536"
-    - "--max-num-batched-tokens=32768"
-    - "--dtype=auto"
-    - "--gpu-memory-utilization"
-    - "0.90"
-    - "--enable-prefix-caching"
-    - "--mamba-backend=flashinfer"
-    - "--mamba-cache-mode=align"
-    - "--reasoning-parser=nemotron_v3"
-    # qwen3_coder is NVIDIA's vLLM tool parser for Nemotron (not a Qwen model).
-    - "--enable-auto-tool-choice"
-    - "--tool-call-parser"
-    - "qwen3_coder"
+  - --max-model-len=65536
+  - --max-num-batched-tokens=32768
+  - --dtype=auto
+  - --gpu-memory-utilization
+  - '0.90'
+  - --enable-prefix-caching
+  - --mamba-backend=flashinfer
+  - --mamba-cache-mode=align
+  - --reasoning-parser=nemotron_v3
+  - --enable-auto-tool-choice
+  - --tool-call-parser
+  - qwen3_coder
 workflowProfile:
   lightningAgent:
     maxTokens: 32768

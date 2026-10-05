@@ -26,7 +26,7 @@ llms:
   nemotron_lightning_intent_llm:
     _type: openai
     model_name: {{ .Values.global.model.servedName }}
-    base_url: ${AIQ_LIGHTNING_BASE_URL:-http://vllm-inference-service-predictor.aiq-inference.svc.cluster.local/v1}
+    base_url: ${AIQ_LIGHTNING_BASE_URL:-{{ include "aiq.localEndpoint" . }}}
     api_key: ${VLLM_API_KEY}
     temperature: 0.1
     top_p: 0.9
@@ -39,7 +39,7 @@ llms:
   nemotron_lightning_agent_llm:
     _type: openai
     model_name: {{ .Values.global.model.servedName }}
-    base_url: ${AIQ_LIGHTNING_BASE_URL:-http://vllm-inference-service-predictor.aiq-inference.svc.cluster.local/v1}
+    base_url: ${AIQ_LIGHTNING_BASE_URL:-{{ include "aiq.localEndpoint" . }}}
     api_key: ${VLLM_API_KEY}
     temperature: 0.2
     top_p: 0.7

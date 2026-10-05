@@ -1,39 +1,32 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, Red Hat, Inc.
-# SPDX-License-Identifier: Apache-2.0
-#
-# Same BF16 checkpoint and token limits as bf16, with --tensor-parallel-size=4.
-# Tensor parallel splits the ~60 GB weights across four GPUs. One card cannot hold them.
-# Example Phase 0 worker: g5.12xlarge (4x A10G 24 GiB).
-# If vLLM OOMs at 65536 context, lower --max-model-len and maxTokens together.
+# Serving preset; topology and resource arithmetic live in global.serving.
 global:
   model:
     hfRepo: nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16
     servedName: nemotron-3.5-lightning-30b-a3b-bf16
-modelCache:
-  size: 150Gi
-vllmInferenceService:
-  predictor:
-    resources:
-      limits:
-        nvidia.com/gpu: "4"
+    revision: a9904d24bcc1d289a1950fa9d2b978c47cf903b9
+    size: 150Gi
+  serving:
+    gpusPerNode: 4
+    tensorParallel: 4
+    cpu: "16"
+    memory: 64Gi
+    shmSize: 8Gi
+  modelCache:
+    capacity: 350Gi
 vllmServingRuntime:
   args:
-    - "--model=/cache/models"
-    - "--distributed-executor-backend=mp"
-    - "--tensor-parallel-size=4"
-    - "--max-model-len=65536"
-    - "--max-num-batched-tokens=32768"
-    - "--dtype=auto"
-    - "--gpu-memory-utilization"
-    - "0.90"
-    - "--enable-prefix-caching"
-    - "--mamba-backend=flashinfer"
-    - "--mamba-cache-mode=align"
-    - "--reasoning-parser=nemotron_v3"
-    # qwen3_coder is NVIDIA's vLLM tool parser for Nemotron (not a Qwen model).
-    - "--enable-auto-tool-choice"
-    - "--tool-call-parser"
-    - "qwen3_coder"
+  - --max-model-len=65536
+  - --max-num-batched-tokens=32768
+  - --dtype=auto
+  - --gpu-memory-utilization
+  - '0.90'
+  - --enable-prefix-caching
+  - --mamba-backend=flashinfer
+  - --mamba-cache-mode=align
+  - --reasoning-parser=nemotron_v3
+  - --enable-auto-tool-choice
+  - --tool-call-parser
+  - qwen3_coder
 workflowProfile:
   lightningAgent:
     maxTokens: 32768

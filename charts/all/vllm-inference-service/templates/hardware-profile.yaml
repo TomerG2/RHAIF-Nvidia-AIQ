@@ -16,5 +16,5 @@ spec:
     type: Node
     node:
       tolerations:
-        {{- toYaml .Values.vllmInferenceService.tolerations | nindent 8 }}
+        {{- toYaml .Values.global.serving.tolerations | nindent 8 }}
 {{- end }}

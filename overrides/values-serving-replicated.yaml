@@ -1,0 +1,4 @@
+# Two independent copies of the selected single-node profile, on distinct nodes.
+global:
+  serving:
+    replicas: 2

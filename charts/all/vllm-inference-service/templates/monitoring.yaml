@@ -1,0 +1,118 @@
+{{- if .Values.monitoring.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aiq-model-metrics
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: aiq-model-metrics-cache-status
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: aiq-model-gate
+subjects:
+  - kind: ServiceAccount
+    name: aiq-model-metrics
+    namespace: {{ .Release.Namespace }}
+{{- range $ns := list .Release.Namespace .Values.global.modelCache.jobNamespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: aiq-model-metrics
+  namespace: {{ $ns }}
+rules:
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [get, list]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: aiq-model-metrics
+  namespace: {{ $ns }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: aiq-model-metrics
+subjects:
+  - kind: ServiceAccount
+    name: aiq-model-metrics
+    namespace: {{ $.Release.Namespace }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aiq-model-metrics
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: aiq-model-metrics}
+  template:
+    metadata:
+      labels: {app: aiq-model-metrics}
+    spec:
+      serviceAccountName: aiq-model-metrics
+      containers:
+        - name: metrics
+          image: {{ .Values.global.modelTools.image | quote }}
+          command: [python, /scripts/metrics.py]
+          env:
+            - {name: NAMESPACE, value: {{ .Release.Namespace }}}
+            - {name: CACHE_NAMESPACE, value: {{ .Values.global.modelCache.jobNamespace }}}
+            - {name: CACHE_NAME, value: {{ include "aiq.cacheName" . }}}
+          ports: [{name: metrics, containerPort: 9090}]
+          readinessProbe:
+            httpGet: {path: /health, port: metrics}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: "1", memory: 512Mi}
+          volumeMounts:
+            - {name: scripts, mountPath: /scripts, readOnly: true}
+      volumes:
+        - name: scripts
+          configMap:
+            name: {{ include "aiq.scriptsName" . }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: aiq-model-preparation
+spec:
+  selector:
+    matchLabels: {app: aiq-model-metrics}
+  podMetricsEndpoints:
+    - {port: metrics, path: /metrics, interval: 30s}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: aiq-vllm
+spec:
+  selector:
+    matchLabels:
+      aiq.rhai.redhat.com/serving: {{ include "vllm-inference-service.fullname" . }}
+  podMetricsEndpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: aiq-serving
+spec:
+  groups:
+    - name: aiq-serving
+      rules:
+        - record: aiq:request_latency_seconds:p95
+          expr: histogram_quantile(0.95, sum by (le, namespace) (rate(vllm:e2e_request_latency_seconds_bucket{namespace="{{ .Release.Namespace }}"}[5m])))
+        - record: aiq:generation_tokens_per_second
+          expr: sum by (namespace) (rate(vllm:generation_tokens_total{namespace="{{ .Release.Namespace }}"}[5m]))
+{{- end }}

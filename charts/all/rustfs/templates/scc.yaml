@@ -1,0 +1,36 @@
+# The official image owns /data and /logs as 10001:10001 with mode 0750.
+# This SCC permits exactly that identity, only for the RustFS service account.
+apiVersion: security.openshift.io/v1
+kind: SecurityContextConstraints
+metadata:
+  name: aiq-rustfs
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+allowPrivilegedContainer: false
+allowPrivilegeEscalation: false
+allowHostDirVolumePlugin: false
+allowHostIPC: false
+allowHostNetwork: false
+allowHostPID: false
+allowHostPorts: false
+readOnlyRootFilesystem: true
+requiredDropCapabilities: [ALL]
+runAsUser:
+  type: MustRunAs
+  uid: 10001
+fsGroup:
+  type: MustRunAs
+  ranges:
+    - min: 10001
+      max: 10001
+supplementalGroups:
+  type: MustRunAs
+  ranges:
+    - min: 10001
+      max: 10001
+seLinuxContext:
+  type: MustRunAs
+seccompProfiles: [runtime/default]
+volumes: [configMap, secret, persistentVolumeClaim, projected, emptyDir]
+users:
+  - system:serviceaccount:{{ .Release.Namespace }}:rustfs

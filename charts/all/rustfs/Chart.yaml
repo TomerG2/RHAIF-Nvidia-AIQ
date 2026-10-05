@@ -1,0 +1,8 @@
+apiVersion: v2
+name: aiq-model-store
+description: RustFS durable model artifacts, TLS, and least-privilege identities
+version: 0.1.0
+dependencies:
+  - name: rustfs
+    version: 1.0.1
+    repository: https://charts.rustfs.com

@@ -20,3 +20,9 @@ spec:
     kserve:
       managementState: Managed
       rawDeploymentServiceConfig: Headed
+      modelCache:
+        managementState: Managed
+        cacheSize: {{ .Values.global.modelCache.capacity | quote }}
+        nodeSelector:
+          matchLabels:
+            {{- toYaml .Values.global.modelCache.nodeSelector | nindent 12 }}

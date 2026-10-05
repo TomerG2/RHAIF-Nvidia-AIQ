@@ -1,80 +1,45 @@
-{{- if .Values.placeholder }}
-{{- fail (printf "%s" .Values.placeholder) }}
-{{- end }}
+{{- if eq (int .Values.global.serving.nodesPerReplica) 1 }}
 apiVersion: serving.kserve.io/v1alpha1
 kind: ServingRuntime
 metadata:
+  name: {{ include "vllm-inference-service.fullname" . }}
   annotations:
     {{- toYaml .Values.vllmServingRuntime.annotations | nindent 4 }}
-  name: {{ include "vllm-inference-service.fullname" . }}
-  labels:
-    opendatahub.io/dashboard: 'true'
 spec:
-  annotations:
-    prometheus.io/path: /metrics
-    prometheus.io/port: '8080'
-  containers:
-    - args:
-        {{- toYaml .Values.vllmServingRuntime.args | nindent 8 }}
-        - {{ printf "--served-model-name=%s" (include "vllm-inference-service.servedModelName" .) }}
-        - {{ printf "--port=%d" (int .Values.vllmServingRuntime.port) }}
-      command:
-        {{- toYaml .Values.vllmServingRuntime.command | nindent 8 }}
-      env:
-        - name: HF_HOME
-          value: /cache
-        - name: HF_TOKEN
-          valueFrom:
-            secretKeyRef:
-              key: hftoken
-              name: huggingface-secret
-              optional: true
-        - name: MODEL_ID
-          value: {{ include "vllm-inference-service.hfRepo" . | quote }}
-        - name: HF_HUB_OFFLINE
-          value: '0'
-      image: {{ include "vllm-inference-service.vllmImage" . | quote }}
-      name: kserve-container
-      ports:
-        - containerPort: {{ .Values.vllmServingRuntime.port }}
-          protocol: TCP
-      volumeMounts:
-        - mountPath: /dev/shm
-          name: shm
-        - mountPath: /cache
-          name: {{ if .Values.modelCache.enabled }}model-cache{{ else }}cache{{ end }}
-        {{- if not .Values.modelCache.enabled }}
-        - mountPath: /cache/models
-          name: models
-        {{- end }}
-        - mountPath: /.cache
-          name: dotcache
-        - mountPath: /.config
-          name: dotconfig
-        - mountPath: /.triton
-          name: dottriton
   multiModel: false
   supportedModelFormats:
-    - autoSelect: true
-      name: vLLM
+    - {name: vLLM, autoSelect: true}
+  containers:
+    - name: kserve-container
+      image: {{ include "aiq.runtimeImage" . | quote }}
+      command:
+        - python
+        - -c
+        - |
+          {{- .Files.Get "files/single_node.py" | nindent 10 }}
+      args:
+        {{- include "aiq.args" . | nindent 8 }}
+      env:
+        {{- include "aiq.runtimeEnv" . | nindent 8 }}
+        - {name: AIQ_MODEL_URI, value: {{ include "aiq.uri" . | quote }}}
+      ports:
+        - {containerPort: 8080, name: http}
+      {{- include "aiq.probes" . | nindent 6 }}
+      volumeMounts:
+        - {name: shm, mountPath: /dev/shm}
+        - {name: scratch, mountPath: /tmp}
+      securityContext:
+        allowPrivilegeEscalation: false
+        runAsNonRoot: true
+        capabilities:
+          drop: [ALL]
+          {{- if .Values.global.serving.ipcLock }}
+          add: [IPC_LOCK]
+          {{- end }}
+        seccompProfile: {type: RuntimeDefault}
   volumes:
     - name: shm
-      emptyDir:
-        medium: Memory
-        sizeLimit: 2Gi
-    {{- if .Values.modelCache.enabled }}
-    - name: model-cache
-      persistentVolumeClaim:
-        claimName: {{ include "vllm-inference-service.fullname" . }}-model-cache
-    {{- else }}
-    - name: models
+      emptyDir: {medium: Memory, sizeLimit: {{ .Values.global.serving.shmSize }}}
+    - name: scratch
       emptyDir: {}
-    - name: cache
-      emptyDir: {}
-    {{- end }}
-    - name: dotcache
-      emptyDir: {}
-    - name: dotconfig
-      emptyDir: {}
-    - name: dottriton
-      emptyDir: {}
+{{- end }}
