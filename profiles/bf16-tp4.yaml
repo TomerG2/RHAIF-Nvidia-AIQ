@@ -19,7 +19,9 @@ vllmServingRuntime:
   - --max-num-batched-tokens=32768
   - --dtype=auto
   - --gpu-memory-utilization
-  - '0.90'
+  # RHOAI vLLM 0.24.0+rhaiv.13 profiles CUDA graphs before allocating KV cache.
+  # Four 24 GB L4s need this budget to retain the existing 65536-token context.
+  - '0.95'
   - --enable-prefix-caching
   - --mamba-backend=flashinfer
   - --mamba-cache-mode=align

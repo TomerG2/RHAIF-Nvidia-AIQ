@@ -24,6 +24,10 @@ Choose the existing preset with `./pattern.sh make install PROFILE=bf16-tp4` (or
 names, model arguments, shallow token budgets, and remote deep-research calls.
 The two BF16 presets share the same model revision. The RHOAI runtime digest now
 matches the 3.5.1 operator's installed template.
+The `bf16-tp4` preset reserves 95% of GPU memory: the new runtime's CUDA-graph
+profiling exhausted KV-cache space at the former 90% on four L4 GPUs. Context
+length and application token budgets remain unchanged. Validate memory headroom
+when changing GPU hardware or runtime versions.
 
 `global.serving` is the topology input in `values-global.yaml`:
 
