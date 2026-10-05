@@ -100,7 +100,7 @@ affinity:
 - name: TRANSFER_CONCURRENCY
   value: {{ .Values.global.modelTools.transferConcurrency | quote }}
 - name: DISK_RESERVE_BYTES
-  value: {{ .Values.global.modelTools.diskReserveBytes | quote }}
+  value: {{ .Values.global.modelTools.diskReserveBytes | int64 | quote }}
 {{- end -}}
 {{- define "aiq.probes" -}}
 startupProbe:

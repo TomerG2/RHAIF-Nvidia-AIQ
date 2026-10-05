@@ -252,7 +252,7 @@ revision garbage collection runs.
 python scripts/model-cache.py status
 oc get jobs -n aiq-inference
 oc get localmodelcache -o yaml
-oc get pods -n kserve-localmodel-jobs
+oc get pods -n redhat-ods-applications
 oc get leaderworkerset -n aiq-inference
 ```
 
@@ -264,6 +264,15 @@ timing observations stay absent. Enable OpenShift user-workload monitoring to
 scrape the supplied PodMonitors. vLLM supplies request-latency histograms and token
 counters; recording rules produce `aiq:request_latency_seconds:p95` and
 `aiq:generation_tokens_per_second`.
+
+RHOAI 3.5.1 forces cache jobs into `redhat-ods-applications`. The
+`model-cache-platform` application supplies the pinned downloader settings and
+preserves GPU tolerations on the platform cache agent and its jobs through a
+scoped admission webhook. It has no Kubernetes API token; it mutates only the
+named cache DaemonSet/configuration and identified cache pods in that namespace.
+The reader SCC allows group 1000 for just the two reader service accounts, without
+host access or privilege. Verify the cache files remain readable across namespace
+SELinux boundaries before accepting a deployment as ready.
 
 Local checks:
 

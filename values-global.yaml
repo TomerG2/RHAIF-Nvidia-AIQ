@@ -21,6 +21,7 @@ global:
   # Hybrid Lightning requires RHOAI 3.5+ (vLLM 0.24+). Image digest matches rhods-operator.3.5.1.
   rhoai:
     version: "3.5.1"
+    localModelAgentImage: registry.redhat.io/rhoai/odh-kserve-localmodelnode-agent-rhel9@sha256:e5ec7b0036d4736295dafa1b7aafc8c17a91f5c6b6ff0c848cd2f6af8ec66b03
     vllmImage: registry.redhat.io/rhaii/vllm-cuda-rhel9@sha256:c056e61672b6aea489ad5dde0bd2f8497230f5333e87f7cf6c494eba3bfdc808
   inference:
     namespace: aiq-inference
@@ -69,7 +70,7 @@ global:
       aiq.rhai.redhat.com/model-cache: "true"
     capacity: 200Gi
     nodeGroup: aiq-models
-    jobNamespace: kserve-localmodel-jobs
+    jobNamespace: redhat-ods-applications # RHOAI's module forces jobs into its own namespace.
     retainedRevisions: [] # entries: {hfRepo, revision, size}; retain rollback copies
   # Optional StorageClass for the retained legacy PVC.
   storageClass: ""
@@ -178,6 +179,14 @@ clusterGroup:
       path: charts/all/model-tools
       annotations:
         argocd.argoproj.io/sync-wave: "5"
+    model-cache-platform:
+      name: model-cache-platform
+      namespace: aiq-inference
+      path: charts/all/model-cache-platform
+      annotations:
+        argocd.argoproj.io/sync-wave: "16"
+      extraValueFiles:
+        - '/profiles/{{ $.Values.global.hardwareProfile }}.yaml'
     rustfs:
       name: rustfs
       namespace: aiq-model-storage

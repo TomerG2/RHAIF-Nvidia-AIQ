@@ -1,0 +1,124 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: aiq-cache-admission
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: aiq-cache-admission
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  secretName: aiq-cache-admission-tls
+  dnsNames: [aiq-cache-admission.{{ .Release.Namespace }}.svc]
+  issuerRef: {name: aiq-cache-admission, kind: Issuer}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aiq-cache-admission
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  config.json: {{ .Values.global | toJson | quote }}
+  admission.py: |
+{{ .Files.Get "files/admission.py" | indent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aiq-cache-admission
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  selector: {app: aiq-cache-admission}
+  ports: [{port: 443, targetPort: 9443}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aiq-cache-admission
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: aiq-cache-admission}
+  template:
+    metadata:
+      labels: {app: aiq-cache-admission}
+      annotations:
+        configuration: {{ printf "%s%s" (.Values.global | toJson) (.Files.Get "files/admission.py") | sha256sum | quote }}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: admission
+          image: {{ .Values.global.modelTools.image | quote }}
+          command: [python, /scripts/admission.py]
+          ports: [{name: https, containerPort: 9443}]
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: "1", memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities: {drop: [ALL]}
+            seccompProfile: {type: RuntimeDefault}
+          readinessProbe:
+            httpGet: {path: /health, port: https, scheme: HTTPS}
+          volumeMounts:
+            - {name: scripts, mountPath: /scripts, readOnly: true}
+            - {name: tls, mountPath: /tls, readOnly: true}
+      volumes:
+        - name: scripts
+          configMap: {name: aiq-cache-admission}
+        - name: tls
+          secret: {secretName: aiq-cache-admission-tls}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: aiq-model-cache-platform
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/aiq-cache-admission
+webhooks:
+  - name: cache.aiq.rhai.redhat.com
+    admissionReviewVersions: [v1]
+    sideEffects: None
+    failurePolicy: Fail
+    reinvocationPolicy: IfNeeded
+    timeoutSeconds: 5
+    clientConfig:
+      service:
+        name: aiq-cache-admission
+        namespace: {{ .Release.Namespace }}
+        port: 443
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: {{ .Values.global.modelCache.jobNamespace }}
+    matchConditions:
+      - name: only-platform-cache
+        expression: >-
+          (request.kind.kind == 'DaemonSet' && object.metadata.name == 'kserve-localmodelnode-agent') ||
+          (request.kind.kind == 'ConfigMap' && object.metadata.name == 'inferenceservice-config') ||
+          (request.kind.kind == 'Pod' && has(object.spec.serviceAccountName) &&
+          object.spec.serviceAccountName in ['aiq-model-reader', 'kserve-localmodelnode-agent', 'kserve-localmodelnode-agent-permfix'])
+    rules:
+      - operations: [CREATE, UPDATE]
+        apiGroups: [apps]
+        apiVersions: [v1]
+        resources: [daemonsets]
+      - operations: [CREATE, UPDATE]
+        apiGroups: [""]
+        apiVersions: [v1]
+        resources: [configmaps]
+      - operations: [CREATE]
+        apiGroups: [""]
+        apiVersions: [v1]
+        resources: [pods]

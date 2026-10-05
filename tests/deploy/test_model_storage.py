@@ -116,6 +116,10 @@ def test_cache_revisions_and_disk_reservation(tmp_path):
     downloader = next(d for d in documents if d["kind"] == "ClusterStorageContainer" and d["spec"]["workloadType"] == "localModelDownloadJob")
     assert "shutil.disk_usage" in downloader["spec"]["container"]["command"][2]
     assert "tempfile.TemporaryFile" in downloader["spec"]["container"]["command"][2]
+    assert next(e["value"] for e in downloader["spec"]["container"]["env"] if e["name"] == "DISK_RESERVE_BYTES") == "1073741824"
+    publication = next(d for d in documents if d["kind"] == "Job" and d["metadata"]["name"].startswith("publish-"))
+    for container in publication["spec"]["template"]["spec"]["containers"] + publication["spec"]["template"]["spec"]["initContainers"]:
+        assert next(e["value"] for e in container["env"] if e["name"] == "DISK_RESERVE_BYTES") == "1073741824"
 
 
 def test_duplicate_rollback_revision_is_rejected(tmp_path):

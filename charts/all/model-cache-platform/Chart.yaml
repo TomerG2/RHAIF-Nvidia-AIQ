@@ -1,0 +1,4 @@
+apiVersion: v2
+name: model-cache-platform
+description: RHOAI 3.5.1 cache compatibility for dedicated GPU nodes
+version: 0.1.0
