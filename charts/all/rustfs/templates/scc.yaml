@@ -31,6 +31,6 @@ supplementalGroups:
 seLinuxContext:
   type: MustRunAs
 seccompProfiles: [runtime/default]
-volumes: [configMap, secret, persistentVolumeClaim, projected, emptyDir]
+volumes: [configMap, emptyDir, persistentVolumeClaim, projected, secret]
 users:
   - system:serviceaccount:{{ .Release.Namespace }}:rustfs
