@@ -134,6 +134,7 @@ def test_legacy_pvc_keeps_its_recorded_capacity(tmp_path):
 def test_rustfs_standalone_and_distributed(tmp_path):
     chart = ROOT / "charts/all/rustfs"
     documents = render(tmp_path, chart=chart)
+    assert not any(d["kind"] == "Ingress" for d in documents)
     deployment = kind(documents, "Deployment")
     assert deployment["spec"]["replicas"] == 1
     pod = deployment["spec"]["template"]["spec"]

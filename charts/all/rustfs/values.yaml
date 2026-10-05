@@ -58,6 +58,8 @@ rustfs:
       cpu: "4"
       memory: 8Gi
   nodeSelector: {}
+  ingress:
+    enabled: false # Internal S3 service; upstream defaults target an nginx ingress.
   tolerations: []
   podAnnotations:
     argocd.argoproj.io/sync-options: Prune=false,Delete=false
