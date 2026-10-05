@@ -7,7 +7,7 @@ metadata:
   namespace: {{ .Values.global.modelCache.jobNamespace }}
   annotations:
     argocd.argoproj.io/sync-wave: "4"
-    argocd.argoproj.io/sync-options: ServerSideApply=true,Validate=false
+    argocd.argoproj.io/sync-options: ServerSideApply=true,Validate=false,Prune=false,Delete=false
 spec:
   template:
     metadata:
@@ -24,7 +24,7 @@ metadata:
   namespace: {{ .Values.global.modelCache.jobNamespace }}
   annotations:
     argocd.argoproj.io/sync-wave: "3"
-    argocd.argoproj.io/sync-options: ServerSideApply=true
+    argocd.argoproj.io/sync-options: ServerSideApply=true,Prune=false,Delete=false
 data:
   localModel: {{ dict "enabled" true "fsGroup" 1000 "jobNamespace" .Values.global.modelCache.jobNamespace "defaultJobImage" .Values.global.modelTools.image "localModelAgentImage" .Values.global.rhoai.localModelAgentImage "localModelAgentCpuRequest" "100m" "localModelAgentCpuLimit" "100m" "localModelAgentMemoryRequest" "200Mi" "localModelAgentMemoryLimit" "300Mi" | toJson | quote }}
 ---

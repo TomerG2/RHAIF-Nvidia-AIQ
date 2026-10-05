@@ -273,6 +273,10 @@ named cache DaemonSet/configuration and identified cache pods in that namespace.
 The reader SCC allows group 1000 for just the two reader service accounts, without
 host access or privilege. Verify the cache files remain readable across namespace
 SELinux boundaries before accepting a deployment as ready.
+The shared platform DaemonSet and ConfigMap are protected from Argo pruning and
+cascading deletion. To retire this compatibility layer, remove the webhook first,
+then restore only the `localModel` settings and added tolerations/annotation with
+field-level patches; never delete the shared ConfigMap or platform DaemonSet.
 
 Local checks:
 
