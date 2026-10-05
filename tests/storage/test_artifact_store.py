@@ -22,6 +22,20 @@ gate = load("gate")
 distributed = load("distributed")
 
 
+def test_platform_endpoint_preserves_tls(monkeypatch):
+    monkeypatch.setenv("S3_ENDPOINT", "rustfs:9000")
+    monkeypatch.setenv("AWS_ENDPOINT_URL", "https://rustfs:9000")
+    monkeypatch.setenv("AWS_CA_BUNDLE", "/trusted/ca.crt")
+    session = Mock()
+    monkeypatch.setattr(store.boto3.session, "Session", Mock(return_value=session))
+    store.client()
+    assert session.client.call_args.kwargs["endpoint_url"] == "https://rustfs:9000"
+    assert session.client.call_args.kwargs["verify"] == "/trusted/ca.crt"
+    monkeypatch.setenv("AWS_ENDPOINT_URL", "http://rustfs:9000")
+    with pytest.raises(ValueError, match="TLS"):
+        store.client()
+
+
 def test_publication_recovers_only_its_abandoned_staging(tmp_path, monkeypatch):
     abandoned = tmp_path / ".aiq-publish-abandoned"
     abandoned.mkdir()

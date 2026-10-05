@@ -32,7 +32,9 @@ def event(stage, **fields):
 
 
 def client():
-    endpoint = os.environ["S3_ENDPOINT"]
+    # KServe normalizes S3_ENDPOINT to a bare host while supplying the full
+    # standard AWS URL separately. Publication supplies its own HTTPS endpoint.
+    endpoint = os.environ.get("AWS_ENDPOINT_URL") or os.environ["S3_ENDPOINT"]
     if not endpoint.startswith("https://"):
         raise ValueError("S3_ENDPOINT must use TLS")
     return boto3.session.Session().client(
