@@ -281,6 +281,9 @@ Publication stages its snapshot on a separate PVC configured by
 `publication.scratchStorageClass` and `publication.scratchSize`. This avoids
 requiring the complete model to fit on a storage node's ephemeral root disk and
 allows retrying a download. It is retained for explicit cleanup after publication.
+Publication jobs serialize through a scratch-volume lock and remove only their
+own abandoned staging directories before retrying. Hugging Face transfers use
+streaming HTTP instead of the Xet reconstruction buffers to bound pod memory.
 
 Local checks:
 
