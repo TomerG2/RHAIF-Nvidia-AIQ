@@ -39,7 +39,7 @@ exists in namespace `aiq`; for shallow success the in-cluster InferenceService
 `NVIDIA_API_KEY` already in the deployment secrets.
 
 ```bash
-SKILL_DIR=".cursor/skills/verify-aiq"
+SKILL_DIR=".agents/skills/verify-aiq"
 chmod +x ${SKILL_DIR}/scripts/*.sh ${SKILL_DIR}/scripts/aiq.py
 
 # Starts oc port-forward (only this run's PID) and prints export lines.
@@ -99,7 +99,7 @@ Deep research can take many minutes. Keep the port-forward alive until both poll
 Artifacts land in:
 
 ```text
-.cursor/skills/verify-aiq/artifacts/<run-id>/
+.agents/skills/verify-aiq/artifacts/<run-id>/
 ```
 
 Expected files:
@@ -153,11 +153,11 @@ All executable; invoke from repo root unless noted.
 
 | Helper | Invocation |
 |---|---|
-| Port-forward | `LAUNCH_OUT="$(.cursor/skills/verify-aiq/scripts/launch-port-forward.sh)" || exit 1; eval "${LAUNCH_OUT}"` |
-| Doctor | `.cursor/skills/verify-aiq/scripts/doctor.sh` |
-| Paired drive | `OUT=$(.cursor/skills/verify-aiq/scripts/run-pair.sh)` |
-| Cleanup | `.cursor/skills/verify-aiq/scripts/cleanup.sh` |
-| Raw client | `python3 .cursor/skills/verify-aiq/scripts/aiq.py <command>` |
+| Port-forward | `LAUNCH_OUT="$(.agents/skills/verify-aiq/scripts/launch-port-forward.sh)" || exit 1; eval "${LAUNCH_OUT}"` |
+| Doctor | `.agents/skills/verify-aiq/scripts/doctor.sh` |
+| Paired drive | `OUT=$(.agents/skills/verify-aiq/scripts/run-pair.sh)` |
+| Cleanup | `.agents/skills/verify-aiq/scripts/cleanup.sh` |
+| Raw client | `python3 .agents/skills/verify-aiq/scripts/aiq.py <command>` |
 
 `scripts/aiq.py` is the NVIDIA AI-Q research helper (stdlib HTTP only). It expects
 `REQUIRE_AUTH=false` on the backend (pattern default for this smoke path) and

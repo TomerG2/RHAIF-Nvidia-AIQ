@@ -11,11 +11,12 @@ from pathlib import Path
 from threading import Event, Lock, Thread
 import time
 import uuid
+import sys
 
 import pytest
 
 
-SCRIPT = Path(__file__).resolve().parents[2] / ".cursor/skills/aiq-research-check/scripts/run.py"
+SCRIPT = Path(__file__).resolve().parents[2] / ".agents/skills/aiq-research-check/scripts/run.py"
 PREFIX = "/api/v1/jobs/async"
 
 
@@ -206,3 +207,37 @@ def test_interruption_keeps_submitted_ids(runner, monkeypatch, tmp_path):
     assert len(state["submissions"]) == 13
     assert all(record["status"] == "interrupted" for record in results["results"])
     assert set(results["potentially_outstanding_job_ids"]) == set(state["jobs"])
+
+
+@pytest.mark.parametrize("available,expected", [(None, 0), (["shallow_researcher"], 1)])
+def test_main_audits_e2e_results_and_preflight_failures(runner, monkeypatch, tmp_path, available, expected):
+    snapshot = {"local": {"sha": "a" * 40, "dirty": False},
+                "deployed": {"serving": None, "workflow": None, "application": None},
+                "pods": [], "nodes": {}, "runtimes": {}, "application": None,
+                "errors": ["cluster unavailable"]}
+    monkeypatch.setattr(runner.audit, "capture", lambda *args: snapshot)
+    with frontend(agents=available) as (url, state):
+        monkeypatch.setattr(sys, "argv", ["run.py", "--frontend-url", url, "--history-dir", str(tmp_path)])
+        assert runner.main() == expected
+    record = runner.audit.history(tmp_path)[0]
+    assert record["comparison"]["baseline"] is None
+    assert record["before"]["deployed"]["serving"] is None
+    directory = Path(record["artifact_dir"])
+    assert (directory / "summary.md").exists()
+    if expected:
+        assert state["submissions"] == []
+        assert record["status"] == "failed"
+        assert "missing agents" in record["error"]
+        assert not (directory / "results.json").exists()
+    else:
+        assert record["status"] == "awaiting_review"
+        assert record["metrics"]["shallow_researcher.successful_requests"] == 10
+        assert record["metrics"]["deep_researcher.successful_requests"] == 3
+        collected = json.loads((directory / "results.json").read_text())
+        runner.audit.write_json(directory / "verdicts.json", [
+            {"request_id": r["request_id"], "verdict": "make sense", "reason": "Relevant and coherent"}
+            for r in collected["results"]])
+        runner.audit.review(directory)
+        reviewed = json.loads((directory / "run.json").read_text())
+        assert reviewed["status"] == "passed"
+        assert reviewed["validation"]["counts"]["shallow_researcher"]["make sense"] == 10

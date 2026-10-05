@@ -1,0 +1,4 @@
+interface:
+  display_name: "vLLM Performance Test"
+  short_description: "Benchmark vLLM with commit and hardware run history"
+  default_prompt: "Use $vllm-performance-test to benchmark deployed vLLM and compare its commit, hardware, and results with earlier runs."

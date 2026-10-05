@@ -8,7 +8,6 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
 import json
 from pathlib import Path
 import sys
@@ -18,6 +17,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+
+ROOT = Path(__file__).resolve().parents[4]
+sys.path.insert(0, str(ROOT / "scripts"))
+import performance_audit as audit
 
 
 API_PATH = "/api/v1/jobs/async"
@@ -172,7 +175,7 @@ def collect(base_url, record, path, stop):
         print(f"{record['request_id']}: {record['status']}", file=sys.stderr, flush=True)
 
 
-def run_batch(base_url, output_dir):
+def run_batch(base_url, output_dir, *, audit_run=None):
     agents = request_json(base_url, "GET", "/agents")
     if not isinstance(agents.get("agents"), list):
         raise ValueError("Frontend preflight: expected an agents list")
@@ -183,7 +186,11 @@ def run_batch(base_url, output_dir):
     if missing:
         raise ValueError("Frontend preflight: missing agents: " + ", ".join(sorted(missing)))
 
-    output_dir.mkdir(parents=True, exist_ok=False)
+    if audit_run is None:
+        output_dir.mkdir(parents=True, exist_ok=False)
+    elif output_dir != audit_run.path or (output_dir / "results.json").exists():
+        raise ValueError("Audit output must be a fresh run directory")
+    batch_started = time.monotonic()
     records = []
     for label, count in (("shallow", 10), ("deep", 3)):
         for index, (question, expected) in enumerate(QUESTIONS[:count], 1):
@@ -224,6 +231,7 @@ def run_batch(base_url, output_dir):
     ]
     write_json(output_dir / "results.json", {
         "frontend_url": base_url, "summary": summary,
+        "batch_duration_seconds": round(time.monotonic() - batch_started, 3),
         "potentially_outstanding_job_ids": outstanding, "results": records,
     })
     print(json.dumps(summary), file=sys.stderr)
@@ -234,19 +242,50 @@ def run_batch(base_url, output_dir):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--frontend-url", required=True, help="Frontend origin, e.g. https://aiq.example.com")
+    parser.add_argument("--history-dir", type=Path, default=audit.HISTORY)
+    parser.add_argument("--namespace", default="aiq-inference", help="Serving namespace for audit discovery")
+    parser.add_argument("--name", default="vllm-inference-service")
+    parser.add_argument("--app-namespace", default="aiq")
     args = parser.parse_args()
     base_url = args.frontend_url.rstrip("/")
     parsed = urllib.parse.urlsplit(base_url)
     if (parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.path
             or parsed.query or parsed.fragment or parsed.username or parsed.password):
         parser.error("--frontend-url must be an HTTP(S) origin without a path, credentials, query, or fragment")
-    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
-    output_dir = Path(__file__).resolve().parents[1] / "artifacts" / run_id
+    workload = {"version": 1, "questions": QUESTIONS, "shallow": 10, "deep": 3,
+                "concurrency": 13, "poll_interval_seconds": POLL_INTERVAL,
+                "job_timeout_seconds": JOB_TIMEOUT, "http_timeout_seconds": HTTP_TIMEOUT,
+                "frontend_host": parsed.hostname}
+    run_audit = audit.Audit("research", workload, {"placement": "frontend-http-proxy", "origin": base_url},
+                            root=args.history_dir, namespace=args.namespace, name=args.name,
+                            app_namespace=args.app_namespace)
+    code, error = 1, None
     try:
-        return run_batch(base_url, output_dir)
-    except (OSError, ValueError, RuntimeError) as error:
+        code = run_batch(base_url, run_audit.path, audit_run=run_audit)
+    except KeyboardInterrupt:
+        code = 130
+        error = "Interrupted before batch completion; inspect saved request IDs before any new run"
+    except (OSError, ValueError, RuntimeError) as exc:
+        error = str(exc)
         print(f"ERROR: {error}", file=sys.stderr)
-        return 1
+    metrics = {}
+    results_path = run_audit.path / "results.json"
+    if results_path.exists():
+        collected = json.loads(results_path.read_text())
+        metrics["batch_duration_seconds"] = collected["batch_duration_seconds"]
+        for agent in AGENTS.values():
+            records = [r for r in collected["results"] if r["agent"] == agent]
+            successes = [r for r in records if r["status"] == "completed"]
+            elapsed = [r["elapsed_seconds"] for r in successes]
+            metrics.update({f"{agent}.successful_requests": len(successes),
+                            f"{agent}.failed_requests": len(records) - len(successes),
+                            f"{agent}.median_job_elapsed_seconds": audit.percentile(elapsed, 50),
+                            f"{agent}.p95_job_elapsed_seconds": audit.percentile(elapsed, 95)})
+    status = "interrupted" if code == 130 else "awaiting_review" if code == 0 else "failed"
+    run_audit.finish(status, metrics, {"review_status": "pending", "timing": "submit, poll, and fetch through frontend; includes polling delay"}, error)
+    if not results_path.exists():
+        print(run_audit.path, flush=True)
+    return code
 
 
 if __name__ == "__main__":

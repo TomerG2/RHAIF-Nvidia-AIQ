@@ -7,9 +7,9 @@ NVIDIA AI-Q backend. Read this index before driving, then use the matching featu
 
 - Pattern deployed; `svc/aiq-backend` exists in namespace `aiq`.
 - Launch with
-  `LAUNCH_OUT="$(.cursor/skills/verify-aiq/scripts/launch-port-forward.sh)" || exit 1; eval "${LAUNCH_OUT}"`
+  `LAUNCH_OUT="$(.agents/skills/verify-aiq/scripts/launch-port-forward.sh)" || exit 1; eval "${LAUNCH_OUT}"`
   so `AIQ_SERVER_URL` / `VERIFY_AIQ_STATE_DIR` are exported.
-- Run `.cursor/skills/verify-aiq/scripts/doctor.sh` and require both
+- Run `.agents/skills/verify-aiq/scripts/doctor.sh` and require both
   `shallow_researcher` and `deep_researcher` in `agents`.
 - Use the locked question unless the feature file overrides it:
   `What is the capital of France?`

@@ -21,11 +21,11 @@ Runs the same easy research question through `shallow_researcher` and
 Preconditions:
 
 - Port-forward launch succeeded (`LAUNCH_OUT="$(.../launch-port-forward.sh)" || exit 1; eval "${LAUNCH_OUT}"`).
-- `.cursor/skills/verify-aiq/scripts/doctor.sh` lists both agent types.
+- `.agents/skills/verify-aiq/scripts/doctor.sh` lists both agent types.
 - Question is `What is the capital of France?` unless `VERIFY_AIQ_QUESTION` is set.
 
 - **Run pair.** Drive both agents. Run
-  `OUT=$(.cursor/skills/verify-aiq/scripts/run-pair.sh)`. Exit code `0` and `$OUT`
+  `OUT=$(.agents/skills/verify-aiq/scripts/run-pair.sh)`. Exit code `0` and `$OUT`
   points at an artifact directory containing `shallow-report.json` and
   `deep-report.json`.
 - **Read shallow report.** Open `$OUT/shallow-report.json`. The payload contains

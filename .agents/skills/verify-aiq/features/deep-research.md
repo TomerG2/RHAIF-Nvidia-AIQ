@@ -25,10 +25,10 @@ Preconditions:
 - Question: `What is the capital of France?` (or `VERIFY_AIQ_QUESTION`).
 
 - **Submit.** Run
-  `python3 .cursor/skills/verify-aiq/scripts/aiq.py submit "What is the capital of France?" deep_researcher`.
+  `python3 .agents/skills/verify-aiq/scripts/aiq.py submit "What is the capital of France?" deep_researcher`.
   Exit code `0`; stdout JSON includes `job_id`.
 - **Poll.** Run
-  `python3 .cursor/skills/verify-aiq/scripts/aiq.py research_poll <job_id>`.
+  `python3 .agents/skills/verify-aiq/scripts/aiq.py research_poll <job_id>`.
   Exit code `0`; stdout is the report JSON. Allow a long wait.
 - **Judge.** Report makes sense if it clearly identifies Paris as the capital.
   Extra sections and citations are fine. Write a one-line verdict.
