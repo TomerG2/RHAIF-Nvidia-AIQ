@@ -2,7 +2,8 @@
 apiVersion: serving.kserve.io/v1alpha2
 kind: LLMInferenceServiceConfig
 metadata:
-  name: aiq-tensor-pipeline
+  # Explicit baseRefs do not suppress the operator's automatic pipeline preset.
+  name: {{ .Values.global.rhoai.pipelineConfigName }}
   annotations:
     argocd.argoproj.io/sync-wave: "19"
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
@@ -22,7 +23,7 @@ metadata:
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   baseRefs:
-    - name: aiq-tensor-pipeline
+    - name: {{ .Values.global.rhoai.pipelineConfigName }}
   model:
     uri: {{ include "aiq.uri" . | quote }}
     name: {{ .Values.global.model.servedName | quote }}

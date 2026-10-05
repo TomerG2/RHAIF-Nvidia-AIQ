@@ -9,10 +9,10 @@ GLOBAL = ROOT / "values-global.yaml"
 CHART = ROOT / "charts/all/vllm-inference-service"
 
 
-def render(tmp_path, values=None, profile="nvfp4", chart=CHART):
+def render(tmp_path, values=None, profile="nvfp4", chart=CHART, namespace="aiq-inference"):
     override = tmp_path / "override.yaml"
     override.write_text(yaml.safe_dump(values or {}))
-    command = ["helm", "template", "vllm-inference-service", str(chart), "-n", "aiq-inference",
+    command = ["helm", "template", "vllm-inference-service", str(chart), "-n", namespace,
                "-f", str(GLOBAL), "-f", str(ROOT / f"profiles/{profile}.yaml"), "-f", str(override)]
     result = subprocess.run(command, capture_output=True, text=True)
     if result.returncode:
@@ -46,12 +46,27 @@ def test_independent_replicas_are_spread_and_do_not_mount_legacy_pvc(tmp_path):
     assert not any("persistentVolumeClaim" in volume for volume in volumes)
 
 
+@pytest.mark.parametrize("nodes", [1, 2])
+def test_node_allowlist_constrains_single_and_distributed_pods(tmp_path, nodes):
+    selected = [f"gpu-{i}" for i in range(nodes)]
+    docs = render(tmp_path, {"global": {"serving": {
+        "nodesPerReplica": nodes, "pipelineParallel": nodes, "nodeNames": selected}}})
+    pods = ([kind(docs, "InferenceService")["spec"]["predictor"]] if nodes == 1 else
+            [kind(docs, "LLMInferenceServiceConfig")["spec"][role] for role in ("template", "worker")])
+    for pod in pods:
+        expression = pod["affinity"]["nodeAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"]["nodeSelectorTerms"][0]["matchFields"][0]
+        assert expression == {"key": "metadata.name", "operator": "In", "values": selected}
+
+
 @pytest.mark.parametrize("nodes,gpus", [(2, 1), (2, 2), (4, 8)])
 def test_distributed_layout_has_explicit_leader_and_worker_startup(tmp_path, nodes, gpus):
     documents = render(tmp_path, {"global": {"serving": {
         "nodesPerReplica": nodes, "gpusPerNode": gpus, "tensorParallel": gpus, "pipelineParallel": nodes}}})
     assert not any(d["kind"] == "InferenceService" for d in documents)
     service = kind(documents, "LLMInferenceService")["spec"]
+    preset = kind(documents, "LLMInferenceServiceConfig")["metadata"]["name"]
+    assert preset == "v3-5-1-kserve-config-llm-worker-pipeline-parallel"
+    assert service["baseRefs"] == [{"name": preset}]
     assert service["parallelism"] == {"tensor": gpus, "pipeline": nodes}
     assert service["model"]["uri"] == kind(documents, "LocalModelCache")["spec"]["sourceModelUri"]
     config = kind(documents, "LLMInferenceServiceConfig")["spec"]
@@ -74,6 +89,7 @@ def test_distributed_layout_has_explicit_leader_and_worker_startup(tmp_path, nod
     ({"global": {"serving": {"gpusPerNode": 2}}}, "must equal"),
     ({"global": {"serving": {"replicas": 0}}}, "positive integer"),
     ({"global": {"serving": {"gpusPerNode": 1.5}}}, "positive integer"),
+    ({"global": {"serving": {"replicas": 2, "nodeNames": ["gpu-one"]}}}, "enough distinct nodes"),
     ({"global": {"serving": {"nodesPerReplica": 2, "tensorParallel": 2}}}, "pipelineParallel=nodesPerReplica"),
     ({"global": {"model": {"revision": "main"}}}, "immutable"),
     ({"vllmServingRuntime": {"args": ["--tensor-parallel-size=7"]}}, "managed"),
@@ -95,6 +111,8 @@ def test_publication_cache_and_serving_order(tmp_path):
     documents = render(tmp_path)
     jobs = {d["metadata"]["name"]: d for d in documents if d["kind"] == "Job"}
     publication = next(d for name, d in jobs.items() if name.startswith("publish-"))
+    assert publication["metadata"]["annotations"]["argocd.argoproj.io/hook"] == "Sync"
+    assert publication["metadata"]["annotations"]["argocd.argoproj.io/hook-delete-policy"] == "BeforeHookCreation"
     wave = lambda d: int(d["metadata"]["annotations"]["argocd.argoproj.io/sync-wave"])
     assert wave(jobs["aiq-model-preflight"]) < wave(publication)
     assert wave(publication) < wave(kind(documents, "LocalModelCache"))
@@ -142,16 +160,17 @@ def test_legacy_pvc_keeps_its_recorded_capacity(tmp_path):
 
 def test_rustfs_standalone_and_distributed(tmp_path):
     chart = ROOT / "charts/all/rustfs"
-    documents = render(tmp_path, chart=chart)
+    documents = render(tmp_path, chart=chart, namespace="aiq-model-storage")
     assert not any(d["kind"] == "Ingress" for d in documents)
     deployment = kind(documents, "Deployment")
     assert deployment["spec"]["replicas"] == 1
     pod = deployment["spec"]["template"]["spec"]
     assert pod["securityContext"]["runAsUser"] == 10001
     assert all("@sha256:" in c["image"] for c in pod["containers"] + pod["initContainers"])
-    assert kind(documents, "SecurityContextConstraints")["users"] == ["system:serviceaccount:aiq-inference:rustfs"]
+    assert kind(documents, "SecurityContextConstraints")["users"] == ["system:serviceaccount:aiq-model-storage:rustfs"]
     overlay = yaml.safe_load((ROOT / "overrides/values-rustfs-distributed.yaml").read_text())
-    distributed = render(tmp_path, overlay, chart=chart)
+    distributed = render(tmp_path, overlay, chart=chart, namespace="aiq-model-storage")
+    assert kind(distributed, "SecurityContextConstraints")["users"] == ["system:serviceaccount:aiq-model-storage:rustfs"]
     statefulset = kind(distributed, "StatefulSet")["spec"]
     assert statefulset["replicas"] == 4
     assert len(statefulset["volumeClaimTemplates"]) == 1

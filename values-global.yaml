@@ -21,6 +21,8 @@ global:
   # Hybrid Lightning requires RHOAI 3.5+ (vLLM 0.24+). Image digest matches rhods-operator.3.5.1.
   rhoai:
     version: "3.5.1"
+    # Must match the installed controller's automatic pipeline preset lookup.
+    pipelineConfigName: v3-5-1-kserve-config-llm-worker-pipeline-parallel
     localModelAgentImage: registry.redhat.io/rhoai/odh-kserve-localmodelnode-agent-rhel9@sha256:e5ec7b0036d4736295dafa1b7aafc8c17a91f5c6b6ff0c848cd2f6af8ec66b03
     vllmImage: registry.redhat.io/rhaii/vllm-cuda-rhel9@sha256:c056e61672b6aea489ad5dde0bd2f8497230f5333e87f7cf6c494eba3bfdc808
   inference:
@@ -38,6 +40,7 @@ global:
     shmSize: 2Gi
     startupSeconds: 3600
     nodeSelector: {}
+    nodeNames: [] # Optional serving/cache-gate allowlist when labels select a larger pool.
     topologyKey: kubernetes.io/hostname
     tolerations:
       - key: nvidia.com/gpu

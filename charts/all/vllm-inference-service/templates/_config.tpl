@@ -7,6 +7,12 @@
 {{- if and (gt (int $s.nodesPerReplica) 1) (or (ne (int $s.pipelineParallel) (int $s.nodesPerReplica)) (ne (int $s.tensorParallel) (int $s.gpusPerNode))) -}}
 {{- fail "Distributed startup requires pipelineParallel=nodesPerReplica and tensorParallel=gpusPerNode" -}}
 {{- end -}}
+{{- with $s.nodeNames -}}
+{{- if lt (len (uniq .)) (int (mul $s.replicas $s.nodesPerReplica)) -}}{{ fail "serving.nodeNames must include enough distinct nodes for replicas * nodesPerReplica" }}{{- end -}}
+{{- range . -}}
+{{- if not (regexMatch "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$" .) -}}{{ fail "serving.nodeNames must contain Kubernetes node names" }}{{- end -}}
+{{- end -}}
+{{- end -}}
 {{- if not (regexMatch "^[0-9a-f]{40}$" .Values.global.model.revision) -}}{{ fail "Pin global.model.revision to a full immutable HF commit SHA" }}{{- end -}}
 {{- if not .Values.global.modelCache.nodeSelector -}}{{ fail "Select cache nodes using global.modelCache.nodeSelector" }}{{- end -}}
 {{- if not (hasPrefix "https://" .Values.global.modelStore.endpoint) -}}{{ fail "Model storage must use HTTPS" }}{{- end -}}
@@ -61,6 +67,16 @@ nodeSelector:
 tolerations:
   {{- toYaml .Values.global.serving.tolerations | nindent 2 }}
 affinity:
+  {{- with .Values.global.serving.nodeNames }}
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchFields:
+            - key: metadata.name
+              operator: In
+              values:
+                {{- toYaml . | nindent 16 }}
+  {{- end }}
   podAntiAffinity:
     requiredDuringSchedulingIgnoredDuringExecution:
       - topologyKey: {{ .Values.global.serving.topologyKey }}

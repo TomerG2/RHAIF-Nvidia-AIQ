@@ -151,6 +151,8 @@ metadata:
   labels:
     aiq.rhai.redhat.com/stage: publication
   annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
     argocd.argoproj.io/sync-wave: "5"
 spec:
   backoffLimit: 4

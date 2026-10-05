@@ -44,6 +44,7 @@ global:
     memory: 64Gi
     shmSize: 8Gi
     nodeSelector: {}
+    nodeNames: []  # explicit serving/cache-gate footprint within the labeled pool
     topologyKey: kubernetes.io/hostname
     networkAttachments: []
     rdmaResources: {}
@@ -53,7 +54,13 @@ global:
 
 One-node layouts use `InferenceService`, including multiple independent replicas.
 More than one node per replica uses `LLMInferenceService` with a namespace-scoped
-`aiq-tensor-pipeline` configuration. Every pod in a replica uses the same runtime
+pipeline-worker configuration named by `global.rhoai.pipelineConfigName`
+(`v3-5-1-kserve-config-llm-worker-pipeline-parallel` for 3.5.1). Explicit
+`baseRefs` do not suppress the controller's automatic preset lookup; supplying
+only a differently named config leaves the workload at `ConfigNotFound`.
+The controller attaches `/mnt/models` from the matching cache and propagates
+`spec.labels` onto both leader and worker pod templates after merging our PodSpec.
+Every pod in a replica uses the same runtime
 and `/mnt/models`. The launcher passes `--nnodes`, `--node-rank`, `--master-addr`,
 and `--headless` for workers. KServe derives LWS size from `parallelism.pipeline`
 when data parallelism is absent and uses `RecreateGroupOnPodRestart`.
@@ -96,6 +103,17 @@ Apply the distributed RustFS overlay only to the `rustfs` application's
    assertion about the actual artifact size or available disk. Every download
    tests an actual write, checks free bytes with `statvfs`, and verifies checksums.
    Node replacement uses the label selector automatically.
+
+   If those labels select a larger pool than the serving footprint, set
+   `global.serving.nodeNames` to the explicit nodes for this deployment. Both
+   the readiness gate and required pod node affinity use this allowlist, so a
+   failed download on a spare node cannot block rollout or attract a serving pod.
+   Every node in the allowlist must be eligible and warm; it must contain enough
+   distinct topology domains for `replicas × nodesPerReplica`. Without an
+   allowlist, the gate conservatively requires every eligible labeled node:
+   the native cache PV's affinity does not exclude cold nodes. Automatic selection
+   of warm nodes is not implemented. Update a node-name allowlist when replacing
+   a node; the replacement retrieves its model copy from RustFS.
 
 2. Have working NVIDIA drivers, GPU device plugins, and enough distinct eligible
    nodes for `replicas × nodesPerReplica`. Configure CPU/memory/shm for the model.
@@ -174,6 +192,12 @@ It streams every object back to verify SHA-256, then conditionally writes
 `_READY.json`, the manifest and sole availability marker. Failed uploads leave
 no availability marker. Retry reuses verified objects and completes the snapshot;
 repeat installations verify and reuse a completed publication without HF access.
+Publication is an Argo `Sync` hook with `BeforeHookCreation`, so a full sync
+recreates an exhausted failed Job and retries safely. The most recent Job and
+its logs remain until the next sync. A completed publication is still verified
+by reading back its artifacts on each full sync; this adds storage traffic but
+does not download the snapshot from Hugging Face again. Selective resource syncs
+skip hooks and must not be used to bypass preparation gates.
 The bucket versions objects and aborts abandoned multipart uploads after one day.
 Logical immutable prefixes are enforced by the publication protocol; administrative
 or publisher credential holders can still alter objects. Restrict those credentials.

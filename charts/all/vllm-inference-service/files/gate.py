@@ -28,17 +28,57 @@ def quantity(value):
     return int(match[1]) * {None: 1, "Ki": 1024, "Mi": 1024**2, "Gi": 1024**3, "Ti": 1024**4}[match[2]]
 
 
+def api_items(path):
+    """Follow Kubernetes list continuation tokens, including filtered lists."""
+    items, continuation, seen = [], "", set()
+    while True:
+        query = {"limit": 500}
+        if continuation:
+            query["continue"] = continuation
+        page = api(path + ("&" if "?" in path else "?") + urlencode(query))
+        items.extend(page["items"])
+        continuation = page.get("metadata", {}).get("continue", "")
+        if not continuation:
+            return items
+        if continuation in seen:
+            raise RuntimeError("Kubernetes returned a repeated list continuation token")
+        seen.add(continuation)
+
+
+def pod_gpu_request(pod):
+    """Kubernetes scheduling request: init peak vs steady state, plus overhead."""
+    def request(container):
+        resources = container.get("resources", {})
+        return int(resources.get("requests", {}).get("nvidia.com/gpu",
+                   resources.get("limits", {}).get("nvidia.com/gpu", 0)))
+
+    spec = pod.get("spec", {})
+    sidecars, init_peak = 0, 0
+    for container in spec.get("initContainers", []):
+        count = request(container)
+        if container.get("restartPolicy") == "Always":
+            sidecars += count
+            init_peak = max(init_peak, sidecars)
+        else:
+            init_peak = max(init_peak, sidecars + count)
+    steady = sidecars + sum(request(c) for c in spec.get("containers", []))
+    return max(steady, init_peak) + int(spec.get("overhead", {}).get("nvidia.com/gpu", 0))
+
+
 def selected_nodes(config):
     selector = {**config["modelCache"]["nodeSelector"], **config["serving"]["nodeSelector"]}
     query = urlencode({"labelSelector": ",".join(f"{key}={value}" for key, value in selector.items())})
-    return api("/api/v1/nodes?" + query)["items"]
+    return api_items("/api/v1/nodes?" + query)
 
 
 def check_nodes(config, nodes):
     serving = config["serving"]
     required = serving["nodesPerReplica"] * serving["replicas"]
+    allowed = set(serving.get("nodeNames", []))
     eligible = []
     for node in nodes:
+        if allowed and node["metadata"]["name"] not in allowed:
+            continue
         ready = any(c["type"] == "Ready" and c["status"] == "True" for c in node["status"].get("conditions", []))
         if not ready or node.get("spec", {}).get("unschedulable"):
             continue
@@ -59,6 +99,11 @@ def check_nodes(config, nodes):
         if serving["topologyKey"] not in labels:
             continue
         eligible.append(node)
+    # Scheduling affinity contains every allowlisted name. Do not let a cold,
+    # temporarily ineligible member enter placement after this gate passes.
+    unavailable = allowed - {n["metadata"]["name"] for n in eligible}
+    if unavailable:
+        raise RuntimeError(f"Every allowlisted node must be eligible; unavailable: {sorted(unavailable)}")
     domains = {n["metadata"]["labels"][serving["topologyKey"]] for n in eligible}
     if len(domains) < required:
         raise RuntimeError(f"Need {required} ready GPU nodes in distinct topology domains; found {len(domains)}")
@@ -71,7 +116,8 @@ def check_cache(nodes, cache):
     missing = {name: statuses.get(name, "Missing") for name in expected if statuses.get(name) != "NodeDownloaded"}
     copies = cache.get("status", {}).get("copies", {})
     print(json.dumps({"stage": "cache", "nodes": statuses, "copies": copies}), flush=True)
-    if not expected or missing or copies.get("failed", 0) or copies.get("available", 0) < len(expected):
+    # Failures elsewhere in the cache node group do not invalidate these copies.
+    if not expected or missing or copies.get("available", 0) < len(expected):
         raise RuntimeError(f"Cache not ready on selected nodes: {missing}")
 
 
@@ -85,7 +131,7 @@ def preflight(config):
         crd = api("/apis/apiextensions.k8s.io/v1/customresourcedefinitions/" + name)
         if not any(c["type"] == "Established" and c["status"] == "True" for c in crd.get("status", {}).get("conditions", [])):
             raise RuntimeError(f"CRD not established: {name}")
-    csvs = api("/apis/operators.coreos.com/v1alpha1/namespaces/redhat-ods-operator/clusterserviceversions")["items"]
+    csvs = api_items("/apis/operators.coreos.com/v1alpha1/namespaces/redhat-ods-operator/clusterserviceversions")
     if not any(c["metadata"]["name"] == "rhods-operator." + config["rhoai"]["version"]
                and c.get("status", {}).get("phase") == "Succeeded" for c in csvs):
         raise RuntimeError("Configured RHOAI compatibility baseline is not installed")
@@ -104,19 +150,19 @@ def preflight(config):
         raise RuntimeError("Current and retained model sizes exceed declared cache capacity")
     # Capacity is only an initial check. The downloader checks statvfs and a real
     # write on its mounted volume before transferring any files.
-    pods = api("/api/v1/pods")["items"]
+    pods = api_items("/api/v1/pods")
+    service_name = os.environ["SERVICE_NAME"]
     used, old_workload = {}, {}
     for pod in pods:
         if pod.get("status", {}).get("phase") in ("Succeeded", "Failed"):
             continue
         node = pod.get("spec", {}).get("nodeName")
-        count = sum(int(c.get("resources", {}).get("requests", {}).get("nvidia.com/gpu", 0))
-                    for c in pod.get("spec", {}).get("containers", []))
+        count = pod_gpu_request(pod)
         used[node] = used.get(node, 0) + count
         labels = pod["metadata"].get("labels", {})
         if (pod["metadata"]["namespace"] == config["inference"]["namespace"]
-                and (labels.get("aiq.rhai.redhat.com/serving") == "vllm-inference-service"
-                     or labels.get("serving.kserve.io/inferenceservice") == "vllm-inference-service")):
+                and (labels.get("aiq.rhai.redhat.com/serving") == service_name
+                     or labels.get("serving.kserve.io/inferenceservice") == service_name)):
             old_workload[node] = old_workload.get(node, 0) + count
     print(json.dumps({"stage": "gpu_availability", "nodes": [
         {"name": n["metadata"]["name"], "allocatable": n["status"]["allocatable"].get("nvidia.com/gpu"),
