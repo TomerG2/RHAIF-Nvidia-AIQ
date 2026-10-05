@@ -35,7 +35,7 @@ def patches(request, config):
         desired = {**local, "jobNamespace": config["modelCache"]["jobNamespace"],
                    "defaultJobImage": config["modelTools"]["image"],
                    "localModelAgentImage": config["rhoai"]["localModelAgentImage"]}
-        return [] if local == desired else [{"op": "replace", "path": "/data/localModel", "value": json.dumps(desired)}]
+        return [] if local == desired else [{"op": "replace", "path": "/data/localModel", "value": json.dumps(desired, sort_keys=True, separators=(",", ":"))}]
     else:
         return []
     current = spec.get("tolerations", [])

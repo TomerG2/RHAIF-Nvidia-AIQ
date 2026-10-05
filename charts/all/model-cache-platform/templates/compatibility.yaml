@@ -50,7 +50,9 @@ supplementalGroups:
   type: RunAsAny
 seLinuxContext: {type: MustRunAs}
 seccompProfiles: [runtime/default]
-volumes: [configMap, secret, persistentVolumeClaim, projected, emptyDir]
+readOnlyRootFilesystem: false
+groups: []
+volumes: [configMap, emptyDir, persistentVolumeClaim, projected, secret]
 users:
   - system:serviceaccount:{{ .Values.global.modelCache.jobNamespace }}:aiq-model-reader
   - system:serviceaccount:{{ .Values.global.inference.namespace }}:aiq-model-reader
