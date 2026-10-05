@@ -39,6 +39,7 @@ migration:
   replaceBackend: true # Retire the opposite backend only after publication/cache gates.
 publication:
   scratchSize: 80Gi
+  scratchStorageClass: gp3-csi
   timeoutSeconds: 14400
 gate:
   timeoutSeconds: 14400

@@ -277,6 +277,10 @@ The shared platform DaemonSet and ConfigMap are protected from Argo pruning and
 cascading deletion. To retire this compatibility layer, remove the webhook first,
 then restore only the `localModel` settings and added tolerations/annotation with
 field-level patches; never delete the shared ConfigMap or platform DaemonSet.
+Publication stages its snapshot on a separate PVC configured by
+`publication.scratchStorageClass` and `publication.scratchSize`. This avoids
+requiring the complete model to fit on a storage node's ephemeral root disk and
+allows retrying a download. It is retained for explicit cleanup after publication.
 
 Local checks:
 

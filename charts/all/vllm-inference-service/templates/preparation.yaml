@@ -129,6 +129,19 @@ spec:
             name: {{ include "aiq.scriptsName" $ }}
 {{- end }}
 ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: aiq-model-publication-scratch
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: {{ .Values.publication.scratchStorageClass | quote }}
+  resources:
+    requests: {storage: {{ .Values.publication.scratchSize }}}
+---
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -172,8 +185,8 @@ spec:
               valueFrom:
                 secretKeyRef: {name: huggingface-secret, key: hftoken, optional: true}
           resources:
-            requests: {cpu: "1", memory: 1Gi, ephemeral-storage: {{ .Values.publication.scratchSize }}}
-            limits: {cpu: "4", memory: 4Gi, ephemeral-storage: {{ .Values.publication.scratchSize }}}
+            requests: {cpu: "1", memory: 1Gi}
+            limits: {cpu: "4", memory: 4Gi}
           volumeMounts:
             - {name: scripts, mountPath: /scripts, readOnly: true}
             - {name: ca, mountPath: /etc/aiq-ca, readOnly: true}
@@ -185,7 +198,7 @@ spec:
         - name: ca
           configMap: {name: {{ .Values.global.modelStore.caConfigMap }}}
         - name: work
-          emptyDir: {sizeLimit: {{ .Values.publication.scratchSize }}}
+          persistentVolumeClaim: {claimName: aiq-model-publication-scratch}
 {{- define "aiq.bytes" -}}
 {{- $value := toString . -}}
 {{- $unit := regexFind "(Ki|Mi|Gi|Ti)$" $value -}}

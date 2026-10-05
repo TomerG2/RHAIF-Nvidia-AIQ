@@ -103,6 +103,10 @@ def test_publication_cache_and_serving_order(tmp_path):
     assert wave(jobs["aiq-model-switch"]) < wave(kind(documents, "InferenceService"))
     assert wave(kind(documents, "InferenceService")) < wave(jobs["aiq-model-serving"])
     original = publication["metadata"]["name"]
+    scratch = next(d for d in documents if d["kind"] == "PersistentVolumeClaim" and d["metadata"]["name"] == "aiq-model-publication-scratch")
+    assert wave(scratch) == wave(publication)  # WaitForFirstConsumer must see the job in the same wave.
+    assert publication["spec"]["template"]["spec"]["volumes"][-1]["persistentVolumeClaim"]["claimName"] == scratch["metadata"]["name"]
+    assert "ephemeral-storage" not in publication["spec"]["template"]["spec"]["containers"][0]["resources"]["requests"]
     changed = render(tmp_path, {"global": {"serving": {"replicas": 2}}})
     assert original != next(d["metadata"]["name"] for d in changed if d["kind"] == "Job" and d["metadata"]["name"].startswith("publish-"))
 
