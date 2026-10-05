@@ -176,7 +176,7 @@ or publisher credential holders can still alter objects. Restrict those credenti
 
 Change models by pinning a new `global.model.revision` (never `main`) and adjusting
 `global.model.size` and model arguments as needed. `publication.scratchSize` bounds
-ephemeral staging and requests schedulable disk; publication stages up to
+persistent scratch space; publication stages up to
 `global.modelTools.transferConcurrency` files at once. Node download jobs run
 concurrently; the same setting bounds file-transfer concurrency within each job.
 

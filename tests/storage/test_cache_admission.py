@@ -31,6 +31,12 @@ def test_job_tolerations_preserve_existing_and_are_idempotent():
     assert admission.patches(request, CONFIG) == []
 
 
+def test_platform_permission_fix_job_receives_gpu_tolerations():
+    request = pod(account="kserve-localmodel-permfix")
+    request["object"]["spec"]["containers"] = [{"name": "permission-fix", "image": "platform/permission-fix"}]
+    assert admission.patches(request, CONFIG)[0]["value"] == CONFIG["serving"]["tolerations"]
+
+
 @pytest.mark.parametrize("change", [
     lambda r: r.update(namespace="other"),
     lambda r: r["object"]["spec"].update(serviceAccountName="operator"),

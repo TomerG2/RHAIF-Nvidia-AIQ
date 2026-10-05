@@ -108,7 +108,7 @@ webhooks:
           (request.kind.kind == 'DaemonSet' && object.metadata.name == 'kserve-localmodelnode-agent') ||
           (request.kind.kind == 'ConfigMap' && object.metadata.name == 'inferenceservice-config') ||
           (request.kind.kind == 'Pod' && has(object.spec.serviceAccountName) &&
-          object.spec.serviceAccountName in ['aiq-model-reader', 'kserve-localmodelnode-agent', 'kserve-localmodelnode-agent-permfix'])
+          object.spec.serviceAccountName in ['aiq-model-reader', 'kserve-localmodelnode-agent', 'kserve-localmodel-permfix'])
     rules:
       - operations: [CREATE, UPDATE]
         apiGroups: [apps]

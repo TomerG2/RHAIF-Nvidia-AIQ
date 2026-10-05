@@ -23,7 +23,7 @@ def patches(request, config):
         if not any(o.get("kind") in ("Job", "DaemonSet") for o in obj["metadata"].get("ownerReferences", [])):
             return []
         account = spec.get("serviceAccountName", "default")
-        if account not in {"aiq-model-reader", "kserve-localmodelnode-agent", "kserve-localmodelnode-agent-permfix"}:
+        if account not in {"aiq-model-reader", "kserve-localmodelnode-agent", "kserve-localmodel-permfix"}:
             return []
         if account == "aiq-model-reader":
             containers = spec.get("containers", [])
