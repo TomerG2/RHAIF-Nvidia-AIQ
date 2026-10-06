@@ -1,4 +1,5 @@
 # Two-node L4 validation: one GPU per node, TP=1 and PP=2.
+# Cache/serving nodes are selected by the model-cache label, including replacements.
 global:
   model:
     hfRepo: nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4
@@ -14,9 +15,6 @@ global:
     cpu: '4'
     memory: 16Gi
     shmSize: 4Gi
-    nodeNames:
-    - ip-10-0-69-24.us-east-2.compute.internal
-    - ip-10-0-92-33.us-east-2.compute.internal
     ncclEnv:
       NCCL_DEBUG: INFO
 vllmServingRuntime:
