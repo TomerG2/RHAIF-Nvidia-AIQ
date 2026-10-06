@@ -8,6 +8,29 @@ aiq:
   apps:
     backend:
       initContainers:
+        # Helm replaces lists: retain database initialization before adding
+        # the local-model readiness gate.
+        - name: db-init
+          image: bitnami/postgresql:latest
+          command: [sh, -ec]
+          args:
+            - |
+              until pg_isready -h aiq-postgres -U "${DB_USER_NAME}" -d aiq_jobs; do
+                  sleep 2
+              done
+              psql -h aiq-postgres -U "${DB_USER_NAME}" -d aiq_jobs \
+                  -v ON_ERROR_STOP=1 -f /db-init/init.sql
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef: {name: aiq-credentials, key: DB_USER_PASSWORD}
+            - name: DB_USER_NAME
+              valueFrom:
+                secretKeyRef: {name: aiq-credentials, key: DB_USER_NAME}
+          volumeMounts:
+            - name: postgres-init
+              mountPath: /db-init
+              readOnly: true
         - name: wait-for-local-model
           image: nvcr.io/nvidia/blueprint/aiq-agent:2.2.0
           command: [python, -c]

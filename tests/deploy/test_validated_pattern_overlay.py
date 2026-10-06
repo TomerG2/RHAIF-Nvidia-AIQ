@@ -315,6 +315,13 @@ def test_openshift_overlay_mounts_hybrid_config_and_disables_nginx_ingress():
     assert "NAT_JOB_STORE_DB_URL" in env
     assert volume_names == {"postgres-init", "workflow-config"}
     assert config_maps == {"aiq-postgres-init", "aiq-workflow-config"}
+    assert [c["name"] for c in backend["initContainers"]] == ["db-init", "wait-for-local-model"]
+    db_init = backend["initContainers"][0]
+    assert "-v ON_ERROR_STOP=1 -f /db-init/init.sql" in db_init["args"][0]
+    assert db_init["env"][0]["valueFrom"]["secretKeyRef"] == {
+        "name": "aiq-credentials", "key": "DB_USER_PASSWORD"
+    }
+    assert db_init["volumeMounts"][0]["name"] == "postgres-init"
     assert ingresses == []
     assert list(routes) == ["aiq-frontend"]
     frontend_route = routes["aiq-frontend"]

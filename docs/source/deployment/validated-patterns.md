@@ -23,6 +23,12 @@ The Validated Pattern ships hybrid Lightning (GPU stack + in-cluster vLLM) with 
 
 OpenShift overlays stay `values-openshift-base.yaml` + `values-openshift-hybrid-lightning.yaml`. LLM routing is the same for every installable profile: intent + shallow → in-cluster vLLM (Nemotron 3.5 Lightning); clarifier + deep → NVIDIA API Catalog (Nemotron 3 Ultra).
 
+The hybrid backend runs `db-init` before `wait-for-local-model` on every pod
+start. Database initialization applies the idempotent `init-db.sql` with
+`ON_ERROR_STOP=1`, so missing job tables are created on fresh installations and
+SQL errors block startup. Keep both containers when overriding
+`initContainers`: Helm replaces this list rather than appending to it.
+
 To add a profile, add `profiles/<name>.yaml` (vLLM args, GPU count, workflow token fields, optional `global.model`), `variants/<name>/values-<name>.yaml` (`clusterGroup.name` and `global.hardwareProfile`), and `profiles/<name>.mk` (Phase 0 GPU defaults or required-SKU flags; Make always includes it when `PROFILE` is set). A top-level `placeholder:` key makes `make install` refuse the profile.
 
 Workflow YAML is mounted from ConfigMap `aiq-workflow-config` (`charts/aiq-workflow-config/files/config_hybrid_lightning.yml`). Shallow `max_tokens`, `thinking_token_budget`, and the in-cluster `model_name` are rendered from the selected profile.

@@ -139,7 +139,7 @@ def run(args):
     try:
         pod, container = choose_leader(run_audit.record["before"], args.pod)
         execute = lambda argv, timeout=120: audit.remote(pod["name"], args.namespace, container, argv, timeout)
-        help_text = execute(["vllm", "bench", "serve", "--help"])
+        help_text = execute(["vllm", "bench", "serve", "--help=all"])
         (run_audit.path / "benchmark-help.txt").write_text(help_text)
         planned = benchmark_command(args, "placeholder", args.concurrency[0])
         flags = {a for a in planned if a.startswith("--")} | {"--result-dir", "--result-filename"}

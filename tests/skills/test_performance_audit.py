@@ -240,11 +240,13 @@ def benchmark_result():
             "median_tpot_ms": 2, "p95_tpot_ms": 3, "output_lens": [128] * 100}
 
 
-def fake_remote(args, result, *, fail_second=False, interrupt_second=False, flags_available=True):
+def fake_remote(args, result, *, fail_second=False, interrupt_second=False, flags_available=True, grouped_help=False):
     calls = []
     def execute(pod, namespace, container, argv, timeout=120):
         calls.append(argv)
         if argv[:3] == ["vllm", "bench", "serve"]:
+            if grouped_help and "--help=all" not in argv:
+                return "For full list: vllm bench serve --help=all"
             return " ".join(bench.benchmark_command(args, "model", 1) + ["--result-dir", "--result-filename"]) if flags_available else "--model"
         if argv[2] == bench.DISCOVER_MODEL:
             return json.dumps({"id": "model"})
@@ -277,6 +279,14 @@ def test_runner_saves_success_partial_and_interrupted_runs(args, snapshot, bench
         assert "remote benchmark may continue" in record["error"]
     assert sum(len(c) == 5 and c[2] == bench.EXECUTE for c in calls) == 2
     assert (Path(record["artifact_dir"]) / "summary.md").exists()
+
+
+def test_grouped_cli_help_exposes_supported_benchmark_flags(args, snapshot, benchmark_result, monkeypatch):
+    monkeypatch.setattr(audit, "capture", lambda *a: deepcopy(snapshot))
+    execute, calls = fake_remote(args, benchmark_result, grouped_help=True)
+    monkeypatch.setattr(audit, "remote", execute)
+    assert bench.run(args) == 0
+    assert sum(len(c) == 5 and c[2] == bench.EXECUTE for c in calls) == 2
 
 
 def test_unsupported_cli_stops_before_sending_requests(args, snapshot, benchmark_result, monkeypatch):
