@@ -54,8 +54,10 @@ def test_node_allowlist_constrains_single_and_distributed_pods(tmp_path, nodes):
     pods = ([kind(docs, "InferenceService")["spec"]["predictor"]] if nodes == 1 else
             [kind(docs, "LLMInferenceServiceConfig")["spec"][role] for role in ("template", "worker")])
     for pod in pods:
-        expression = pod["affinity"]["nodeAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"]["nodeSelectorTerms"][0]["matchFields"][0]
-        assert expression == {"key": "metadata.name", "operator": "In", "values": selected}
+        terms = pod["affinity"]["nodeAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"]["nodeSelectorTerms"]
+        # Node field selectors allow only one value; separate terms mean OR.
+        assert terms == [{"matchFields": [{"key": "metadata.name", "operator": "In", "values": [name]}]}
+                         for name in selected]
 
 
 @pytest.mark.parametrize("nodes,gpus", [(2, 1), (2, 2), (4, 8)])
@@ -63,6 +65,7 @@ def test_distributed_layout_has_explicit_leader_and_worker_startup(tmp_path, nod
     documents = render(tmp_path, {"global": {"serving": {
         "nodesPerReplica": nodes, "gpusPerNode": gpus, "tensorParallel": gpus, "pipelineParallel": nodes}}})
     assert not any(d["kind"] == "InferenceService" for d in documents)
+    assert kind(documents, "LLMInferenceService")["metadata"]["annotations"]["security.opendatahub.io/enable-auth"] == "false"
     service = kind(documents, "LLMInferenceService")["spec"]
     preset = kind(documents, "LLMInferenceServiceConfig")["metadata"]["name"]
     assert preset == "v3-5-1-kserve-config-llm-worker-pipeline-parallel"

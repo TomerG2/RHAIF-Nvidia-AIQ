@@ -71,11 +71,13 @@ affinity:
   nodeAffinity:
     requiredDuringSchedulingIgnoredDuringExecution:
       nodeSelectorTerms:
+        {{- range . }}
         - matchFields:
             - key: metadata.name
               operator: In
               values:
-                {{- toYaml . | nindent 16 }}
+                - {{ . | quote }}
+        {{- end }}
   {{- end }}
   podAntiAffinity:
     requiredDuringSchedulingIgnoredDuringExecution:

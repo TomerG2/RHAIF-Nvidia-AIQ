@@ -19,6 +19,8 @@ kind: LLMInferenceService
 metadata:
   name: {{ include "vllm-inference-service.fullname" . }}
   annotations:
+    # This backend is reached through the namespace-restricted internal Service.
+    security.opendatahub.io/enable-auth: "false"
     argocd.argoproj.io/sync-wave: "20"
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
