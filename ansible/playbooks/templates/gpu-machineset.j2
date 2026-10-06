@@ -43,7 +43,7 @@ spec:
               iops: 0
               kmsKey:
                 arn: ""
-              volumeSize: 150
+              volumeSize: {{ gpu_root_volume_size | default(150) }}
               volumeType: gp3
           credentialsSecret:
             name: aws-cloud-credentials

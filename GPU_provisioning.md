@@ -37,6 +37,20 @@ Example with a larger node when capacity allows:
 ./pattern.sh make create-gpu-machineset GPU_REPLICAS=1 GPU_INSTANCE_TYPE=g6.12xlarge
 ```
 
+For two four-L4 workers with sufficient BF16 cache disk:
+
+```bash
+./pattern.sh make create-gpu-machineset PROFILE=bf16-tp4 \
+  GPU_REPLICAS=2 GPU_INSTANCE_TYPE=g6.12xlarge \
+  GPU_COUNT=4 GPU_VCPU=48 GPU_MEMORY_MB=196608 GPU_ROOT_VOLUME_SIZE=500
+```
+
+`GPU_ROOT_VOLUME_SIZE` controls the root gp3 volume in GiB (default 150).
+The hardware metadata defaults describe the default single-GPU instance; override
+them together when choosing a different instance. Verify free disk on each node
+before applying the model-cache label. Provisioning two nodes does not itself
+select serving data parallelism or pipeline parallelism.
+
 If AWS returns `InsufficientInstanceCapacity`, retry another zone:
 
 ```bash

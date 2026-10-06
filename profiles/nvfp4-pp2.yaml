@@ -1,0 +1,44 @@
+# Two-node L4 validation: one GPU per node, TP=1 and PP=2.
+global:
+  model:
+    hfRepo: nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4
+    servedName: nemotron-3.5-lightning-30b-a3b
+    revision: bee7596271d1495f6992ae224aefde4410e816b8
+    size: 80Gi
+  serving:
+    gpusPerNode: 1
+    tensorParallel: 1
+    replicas: 1
+    nodesPerReplica: 2
+    pipelineParallel: 2
+    cpu: '4'
+    memory: 16Gi
+    shmSize: 4Gi
+    nodeNames:
+    - ip-10-0-69-24.us-east-2.compute.internal
+    - ip-10-0-92-33.us-east-2.compute.internal
+    ncclEnv:
+      NCCL_DEBUG: INFO
+vllmServingRuntime:
+  args:
+  - --max-model-len=4096
+  - --max-num-batched-tokens=8192
+  - --dtype=auto
+  - --gpu-memory-utilization
+  - '0.90'
+  - --enforce-eager
+  - --moe-backend=marlin
+  - --kv-cache-dtype=fp8
+  - --enable-prefix-caching
+  - --mamba-backend=flashinfer
+  - --mamba-cache-mode=align
+  - --reasoning-parser=nemotron_v3
+  - --enable-auto-tool-choice
+  - --tool-call-parser
+  - qwen3_coder
+workflowProfile:
+  lightningAgent:
+    maxTokens: 1536
+    thinkingTokenBudget: 512
+migration:
+  retainLegacyPVC: false

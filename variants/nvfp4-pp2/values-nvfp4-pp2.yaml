@@ -1,0 +1,4 @@
+clusterGroup:
+  name: nvfp4-pp2
+global:
+  hardwareProfile: nvfp4-pp2

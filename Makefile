@@ -27,6 +27,10 @@ ifneq ($(GPU_INSTANCE_TYPE_REQUIRED),true)
 GPU_INSTANCE_TYPE ?= g6.2xlarge
 endif
 GPU_REPLICAS ?= 1
+GPU_COUNT ?= 1
+GPU_MEMORY_MB ?= 32768
+GPU_VCPU ?= 8
+GPU_ROOT_VOLUME_SIZE ?= 150
 # Azure playbook defaults to 2 replicas (rag-llm-gitops); override when you need a single worker.
 GPU_REPLICAS_AZURE ?= 2
 ifneq ($(GPU_VM_SIZE_REQUIRED),true)
@@ -57,7 +61,7 @@ check-gpu-vm-size:
 .PHONY: create-gpu-machineset
 create-gpu-machineset: check-gpu-instance-type ## Create AWS GPU MachineSet (overrides: GPU_INSTANCE_TYPE, GPU_REPLICAS, OVERRIDE_ZONE, PROFILE)
 	ansible-playbook ansible/playbooks/create-gpu-machineset.yaml \
-		-e "gpu_instance_type=$(GPU_INSTANCE_TYPE) gpu_replicas=$(GPU_REPLICAS) override_zone=$(OVERRIDE_ZONE)"
+		-e "gpu_instance_type=$(GPU_INSTANCE_TYPE) gpu_replicas=$(GPU_REPLICAS) override_zone=$(OVERRIDE_ZONE) gpu_count=$(GPU_COUNT) gpu_memory_mb=$(GPU_MEMORY_MB) gpu_vcpu=$(GPU_VCPU) gpu_root_volume_size=$(GPU_ROOT_VOLUME_SIZE)"
 
 .PHONY: create-gpu-machineset-azure
 create-gpu-machineset-azure: check-gpu-vm-size ## Create Azure GPU MachineSet (overrides: GPU_VM_SIZE, GPU_REPLICAS_AZURE, OVERRIDE_ZONE, PROFILE)
