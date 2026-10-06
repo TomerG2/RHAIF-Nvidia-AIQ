@@ -187,12 +187,17 @@ def test_secret_template_writes_vault_identities_without_target_namespaces():
     assert db_password["onMissingValue"] == "generate"
     assert db_password["vaultPolicy"] == "dbPassword"
     assert aiq_fields == [
-        "DB_USER_NAME",
         "DB_USER_PASSWORD",
+        "DB_USER_NAME",
         "TAVILY_API_KEY",
         "NVIDIA_API_KEY",
         "VLLM_API_KEY",
     ]
+    # The utility loader uses put for the first field and patch thereafter.
+    # A static first field would erase the existing generated password on retry.
+    for secret in template["secrets"]:
+        if any(field.get("onMissingValue") == "generate" for field in secret["fields"]):
+            assert secret["fields"][0].get("onMissingValue") == "generate"
     assert hf_fields == ["hftoken"]
     assert secrets["huggingface-secret"]["fields"][0]["value"] is None
 
@@ -446,4 +451,3 @@ def test_nvfp4_profile_workflow_keeps_small_token_budget():
 def test_nvidia_jwt_external_secrets_stay_disabled():
     nvidia_values = yaml.safe_load(NVIDIA_AIQ_VALUES.read_text(encoding="utf-8"))
     assert nvidia_values["externalSecrets"]["enabled"] is False
-
