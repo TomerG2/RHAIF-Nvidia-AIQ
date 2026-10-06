@@ -21,23 +21,25 @@ Runs the same easy research question through `shallow_researcher` and
 Preconditions:
 
 - Port-forward launch succeeded (`LAUNCH_OUT="$(.../launch-port-forward.sh)" || exit 1; eval "${LAUNCH_OUT}"`).
-- `.agents/skills/verify-aiq/scripts/doctor.sh` lists both agent types.
+- `bash .agents/skills/e2e-verification/scripts/doctor.sh` lists both agent types.
 - Question is `What is the capital of France?` unless `VERIFY_AIQ_QUESTION` is set.
 
 - **Run pair.** Drive both agents. Run
-  `OUT=$(.agents/skills/verify-aiq/scripts/run-pair.sh)`. Exit code `0` and `$OUT`
-  points at an artifact directory containing `shallow-report.json` and
-  `deep-report.json`.
-- **Read shallow report.** Open `$OUT/shallow-report.json`. The payload contains
-  research answer text (report body / message content). Note the `job_id` in
+  `OUT="$(bash .agents/skills/e2e-verification/scripts/run-pair.sh)"`. Exit code `0` and `$OUT`
+  points at an artifact directory containing the report JSON files,
+  `shallow-response.md`, `deep-response.md`, and `responses.md`.
+- **Read shallow response.** Open `$OUT/shallow-response.md` for the complete
+  final answer; `$OUT/shallow-report.json` retains the raw report. Note the `job_id` in
   `$OUT/shallow-job-id.txt`.
-- **Read deep report.** Open `$OUT/deep-report.json`. Note `$OUT/deep-job-id.txt`.
+- **Read deep response.** Open `$OUT/deep-response.md` and the raw
+  `$OUT/deep-report.json`. Note `$OUT/deep-job-id.txt`.
 - **Judge reasonableness.** For each agent, decide only **makes sense** or
   **does not make sense**. For the default question, makes sense means the answer
   clearly identifies Paris. Write `$OUT/verdict.md` with both verdicts and a
   one-line why each.
-- **Proof.** Keep `$OUT` intact after cleanup. Proof is incomplete without
-  `verdict.md` plus both report JSON files.
+- **Proof.** Keep `$OUT` intact after cleanup. Retain `verdict.md`, both report
+  JSON files, both complete response files, and `responses.md`. Link `responses.md`
+  when showing results so the question and actual answers are easy to inspect.
 
 ## Gotchas
 

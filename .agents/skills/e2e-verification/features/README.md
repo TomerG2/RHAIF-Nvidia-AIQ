@@ -1,4 +1,4 @@
-# AI-Q verification map
+# AI-Q E2E verification map
 
 Maintained source for verifying user-facing research behavior of the OpenShift-deployed
 NVIDIA AI-Q backend. Read this index before driving, then use the matching feature file.
@@ -7,9 +7,9 @@ NVIDIA AI-Q backend. Read this index before driving, then use the matching featu
 
 - Pattern deployed; `svc/aiq-backend` exists in namespace `aiq`.
 - Launch with
-  `LAUNCH_OUT="$(.agents/skills/verify-aiq/scripts/launch-port-forward.sh)" || exit 1; eval "${LAUNCH_OUT}"`
+  `LAUNCH_OUT="$(bash .agents/skills/e2e-verification/scripts/launch-port-forward.sh)" || exit 1; eval "${LAUNCH_OUT}"`
   so `AIQ_SERVER_URL` / `VERIFY_AIQ_STATE_DIR` are exported.
-- Run `.agents/skills/verify-aiq/scripts/doctor.sh` and require both
+- Run `bash .agents/skills/e2e-verification/scripts/doctor.sh` and require both
   `shallow_researcher` and `deep_researcher` in `agents`.
 - Use the locked question unless the feature file overrides it:
   `What is the capital of France?`
@@ -26,7 +26,9 @@ NVIDIA AI-Q backend. Read this index before driving, then use the matching featu
 
 ## Proof and skip reporting
 
-- Capture submit + final report for each agent, not only the final text.
+- Capture submit JSON, final report JSON, and the complete response text for each
+  agent. `run-pair.sh` saves `shallow-response.md`, `deep-response.md`, and a
+  combined `responses.md` with the question and job IDs.
 - Reasonableness proof is a written `verdict.md`: **makes sense** or
   **does not make sense** per agent, with one short why.
 - Record the feature ID and entry point with every artifact directory.

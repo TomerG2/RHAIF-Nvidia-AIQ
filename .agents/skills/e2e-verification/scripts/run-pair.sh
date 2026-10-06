@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
 # Drive shallow_researcher then deep_researcher with the same question.
-# Writes evidence under artifacts/<run-id>/; does not delete it on exit.
+# Saves reports and complete response text under artifacts/e2e-verification/<run-id>/.
 set -euo pipefail
 
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "${SKILL_DIR}/../../.." && pwd)"
 export AIQ_SERVER_URL="${AIQ_SERVER_URL:-http://127.0.0.1:8000}"
 
 QUESTION="${VERIFY_AIQ_QUESTION:-What is the capital of France?}"
 RUN_ID="${VERIFY_AIQ_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
-OUT_DIR="${VERIFY_AIQ_ARTIFACT_DIR:-${SKILL_DIR}/artifacts/${RUN_ID}}"
+OUT_DIR="${VERIFY_AIQ_ARTIFACT_DIR:-${REPO_ROOT}/artifacts/e2e-verification/${RUN_ID}}"
 export VERIFY_AIQ_STATE_DIR="${VERIFY_AIQ_STATE_DIR:-/tmp/verify-aiq-${RUN_ID}}"
 JOBS_FILE="${VERIFY_AIQ_STATE_DIR}/started-jobs.txt"
 
 mkdir -p "${OUT_DIR}" "${VERIFY_AIQ_STATE_DIR}"
 : >"${JOBS_FILE}"
 
-echo "${QUESTION}" >"${OUT_DIR}/question.txt"
+printf '%s\n' "${QUESTION}" >"${OUT_DIR}/question.txt"
 {
   echo "AIQ_SERVER_URL=${AIQ_SERVER_URL}"
   echo "run_id=${RUN_ID}"
@@ -31,7 +32,7 @@ run_one() {
 
   echo "=== ${label}: submitting ${agent_type} ===" >&2
   python3 "${SKILL_DIR}/scripts/aiq.py" submit "${QUESTION}" "${agent_type}" \
-    | tee "${submit_out}"
+    | tee "${submit_out}" >&2
 
   local job_id
   job_id="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["job_id"])' <"${submit_out}")"
@@ -40,7 +41,9 @@ run_one() {
 
   echo "=== ${label}: polling ${job_id} ===" >&2
   python3 "${SKILL_DIR}/scripts/aiq.py" research_poll "${job_id}" \
-    | tee "${report_out}"
+    | tee "${report_out}" >&2
+
+  python3 "${SKILL_DIR}/scripts/save-responses.py" "${OUT_DIR}"
 }
 
 run_one "shallow_researcher" "shallow"

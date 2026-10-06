@@ -26,14 +26,18 @@ Preconditions:
 - Question: `What is the capital of France?` (or `VERIFY_AIQ_QUESTION`).
 
 - **Submit.** Run
-  `python3 .agents/skills/verify-aiq/scripts/aiq.py submit "What is the capital of France?" shallow_researcher`.
+  `python3 .agents/skills/e2e-verification/scripts/aiq.py submit "What is the capital of France?" shallow_researcher`.
   Exit code `0`; stdout JSON includes `job_id`.
 - **Poll.** Run
-  `python3 .agents/skills/verify-aiq/scripts/aiq.py research_poll <job_id>`.
+  `python3 .agents/skills/e2e-verification/scripts/aiq.py research_poll <job_id>`.
   Exit code `0`; stdout is the report JSON.
 - **Judge.** Answer makes sense if it clearly names Paris. Write the verdict next
   to any saved report artifact.
-- **Proof.** Save submit JSON, job id, report JSON, and the one-line verdict.
+- **Proof.** Save the exact question in `question.txt`, submit JSON, job id, and
+  report JSON as `shallow-report.json`. Run
+  `python3 .agents/skills/e2e-verification/scripts/save-responses.py <artifact-dir>`
+  to save the complete final answer in `shallow-response.md` and `responses.md`.
+  Retain these files with the one-line verdict.
 
 ## Gotchas
 

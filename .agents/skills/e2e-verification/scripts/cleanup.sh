@@ -33,4 +33,4 @@ if [[ -f "${PID_FILE}" ]]; then
   rm -f "${PID_FILE}"
 fi
 
-echo "Cleanup done. Evidence under ${SKILL_DIR}/artifacts/ is retained." >&2
+echo "Cleanup done. Saved verification artifacts are retained." >&2
