@@ -1,0 +1,51 @@
+---
+- name: Load bootstrap secrets
+  ansible.builtin.import_playbook: rhvp.cluster_utils.load_bootstrap_secrets
+
+- name: Install pattern operators and Pattern resource
+  ansible.builtin.import_playbook: rhvp.cluster_utils.operator_deploy
+
+- name: Initialize pattern Vault before loading late-phase secrets
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - role: rhvp.cluster_utils.pattern_settings
+  tasks:
+    - name: Bootstrap Vault when secret loading uses Vault
+      when:
+        - not (values_global.global.secretLoader.disabled | default(false) | bool)
+        - values_global.global.secretStore.backend | default('vault') == 'vault'
+      block:
+        - name: Prepare bootstrap namespaces
+          ansible.builtin.include_role:
+            name: rhvp.cluster_utils.cluster_pre_check
+        - name: Initialize Vault and retain bootstrap keys in the cluster
+          ansible.builtin.include_role:
+            name: rhvp.cluster_utils.vault_utils
+            tasks_from: vault_init.yaml
+            apply:
+              no_log: true
+          no_log: true
+        - name: Unseal Vault
+          ansible.builtin.include_role:
+            name: rhvp.cluster_utils.vault_utils
+            tasks_from: vault_unseal.yaml
+            apply:
+              no_log: true
+          no_log: true
+        - name: Configure Vault secret backend and hub authentication
+          ansible.builtin.include_role:
+            name: rhvp.cluster_utils.vault_utils
+            tasks_from: vault_secrets_init.yaml
+            apply:
+              no_log: true
+          no_log: true
+
+- name: Load late-phase secrets
+  ansible.builtin.import_playbook: rhvp.cluster_utils.load_secrets
+
+- name: Verify GitOps health
+  ansible.builtin.import_playbook: rhvp.cluster_utils.argo_healthcheck
+  vars:
+    with_retries: true

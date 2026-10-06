@@ -4,6 +4,10 @@
 
 include Makefile-common
 
+# Initialize fresh Vault installations before the utility's late secret loader
+# waits for an unsealed Vault and its hub auth policy.
+INSTALL_PLAYBOOK := ansible/playbooks/install.yaml
+
 # Serving profile. Unset uses main.variant (nvfp4) from values-global.yaml.
 # PROFILE=bf16 exports TARGET_VARIANT so the utility container installs that variant.
 PROFILE ?=

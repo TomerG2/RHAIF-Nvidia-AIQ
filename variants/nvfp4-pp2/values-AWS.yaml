@@ -1,2 +1,7 @@
+# This cluster already has the cert-manager OperatorGroup. Reuse it.
 publication:
   scratchStorageClass: gp3-csi
+clusterGroup:
+  namespaces:
+    cert-manager-operator:
+      operatorGroup: false

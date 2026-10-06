@@ -1,6 +1,7 @@
 MAKEFLAGS += --no-print-directory
 ANSIBLE_STDOUT_CALLBACK ?= rhvp.cluster_utils.readable
 ANSIBLE_RUN ?= ANSIBLE_STDOUT_CALLBACK=$(ANSIBLE_STDOUT_CALLBACK) ansible-playbook $(EXTRA_PLAYBOOK_OPTS)
+INSTALL_PLAYBOOK ?= rhvp.cluster_utils.install
 DOCS_URL := https://validatedpatterns.io/blog/2025-08-29-new-common-makefile-structure/
 
 .PHONY: help
@@ -26,7 +27,7 @@ uninstall: ## (EXPERIMENTAL) See https://validatedpatterns.io/blog/2026-02-16-pa
 
 .PHONY: pattern-install
 pattern-install:
-	@$(ANSIBLE_RUN) rhvp.cluster_utils.install
+	@$(ANSIBLE_RUN) $(INSTALL_PLAYBOOK)
 
 .PHONY: load-secrets
 load-secrets: ## Loads secrets onto the cluster (unless explicitly disabled in values-global.yaml)
