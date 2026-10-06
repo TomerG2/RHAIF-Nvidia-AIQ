@@ -120,12 +120,15 @@ In-cluster vLLM does not authenticate callers. The hybrid workflow config suppli
 
 `./pattern.sh make install` (and `./pattern.sh make load-secrets`) looks for `~/values-secret-aiq.yaml` before falling back to the in-repo template. Vault does not write Kubernetes Secrets into workload namespaces. Argo CD creates those namespaces. ESO creates the Secret objects after the `eso-bindings` applications sync.
 
-Keep generated password fields first within each secret, as in the template.
-The utility loader writes the first field with `vault kv put` and later fields
-with `patch`. A static username/access-key field first erases the existing
-password before its generation check and rotates it on reinstall. Update older
-private secret files to put `DB_USER_PASSWORD`, `RUSTFS_SECRET_KEY`, and
-`AWS_SECRET_ACCESS_KEY` before their corresponding username/access-key fields.
+`make install` and `make load-secrets` automatically order generated password
+fields first in memory before invoking the utility Vault loader. This preserves
+existing passwords even with older private secret files: the utility writes the
+first field with `vault kv put` and later fields with `patch`, so a static first
+field would otherwise erase the password before its generation check. The input
+file remains unchanged. Explicit `override: true` still requests rotation.
+Use the repository Make targets; invoking the upstream secret-loading playbook
+directly bypasses this protection. New GPU nodes receive the existing credentials
+through External Secrets and download the published snapshot from RustFS.
 
 Encrypt `~/values-secret-aiq.yaml` with `ansible-vault encrypt` if you want it encrypted at rest.
 

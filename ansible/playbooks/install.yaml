@@ -43,7 +43,7 @@
           no_log: true
 
 - name: Load late-phase secrets
-  ansible.builtin.import_playbook: rhvp.cluster_utils.load_secrets
+  ansible.builtin.import_playbook: load-secrets.yaml
 
 - name: Verify GitOps health
   ansible.builtin.import_playbook: rhvp.cluster_utils.argo_healthcheck
