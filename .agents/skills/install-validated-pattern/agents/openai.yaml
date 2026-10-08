@@ -1,0 +1,3 @@
+interface:
+  display_name: "Install AI-Q Validated Pattern"
+  short_description: "Deploy AI-Q on OpenShift and verify it sequentially"
