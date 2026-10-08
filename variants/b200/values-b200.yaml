@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, Red Hat, Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Four single-node BF16 replicas, each tensor-parallel across eight B200 GPUs.
+clusterGroup:
+  name: b200
+global:
+  hardwareProfile: b200

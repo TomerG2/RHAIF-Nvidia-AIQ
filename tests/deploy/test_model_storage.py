@@ -24,7 +24,7 @@ def kind(documents, name):
     return next(d for d in documents if d["kind"] == name)
 
 
-@pytest.mark.parametrize("profile,gpus", [("nvfp4", 1), ("bf16", 1), ("bf16-tp4", 4)])
+@pytest.mark.parametrize("profile,gpus", [("nvfp4", 1), ("bf16", 1), ("bf16-tp4", 4), ("b200", 8)])
 def test_profiles_generate_consistent_gpu_counts(tmp_path, profile, gpus):
     documents = render(tmp_path, profile=profile)
     model = kind(documents, "InferenceService")["spec"]["predictor"]["model"]
@@ -37,13 +37,44 @@ def test_profiles_generate_consistent_gpu_counts(tmp_path, profile, gpus):
     assert not any("pip install" in str(doc) for doc in documents)
 
 
-def test_independent_replicas_are_spread_and_do_not_mount_legacy_pvc(tmp_path):
-    documents = render(tmp_path, {"global": {"serving": {"replicas": 3}}})
+@pytest.mark.parametrize("profile,values,replicas", [
+    ("nvfp4", {"global": {"serving": {"replicas": 3}}}, 3),
+    ("b200", {}, 4),
+])
+def test_independent_replicas_are_spread_and_do_not_mount_legacy_pvc(tmp_path, profile, values, replicas):
+    documents = render(tmp_path, values, profile=profile)
     predictor = kind(documents, "InferenceService")["spec"]["predictor"]
-    assert predictor["maxReplicas"] == predictor["minReplicas"] == 3
+    assert predictor["maxReplicas"] == predictor["minReplicas"] == replicas
     assert predictor["affinity"]["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"]
+    assert not any(d["kind"] == "LLMInferenceService" for d in documents)
     volumes = kind(documents, "ServingRuntime")["spec"]["volumes"]
     assert not any("persistentVolumeClaim" in volume for volume in volumes)
+
+
+def test_b200_long_context_is_wired_to_the_single_node_workflow(tmp_path):
+    documents = render(tmp_path, profile="b200")
+    predictor = kind(documents, "InferenceService")["spec"]["predictor"]
+    assert predictor["nodeSelector"] == {
+        "aiq.rhai.redhat.com/model-cache": "true",
+        "nvidia.com/gpu.product": "NVIDIA-B200",
+    }
+    assert predictor["minReplicas"] * int(predictor["model"]["resources"]["requests"]["nvidia.com/gpu"]) == 32
+    args = kind(documents, "ServingRuntime")["spec"]["containers"][0]["args"]
+    context = int(next(arg.split("=", 1)[1] for arg in args if arg.startswith("--max-model-len=")))
+    batch = int(next(arg.split("=", 1)[1] for arg in args if arg.startswith("--max-num-batched-tokens=")))
+    assert batch < context
+    assert "--enable-chunked-prefill" in args
+    workflow = render(tmp_path, profile="b200", chart=ROOT / "charts/aiq-workflow-config", namespace="aiq")
+    config = yaml.safe_load(kind(workflow, "ConfigMap")["data"]["config_hybrid_lightning.yml"])
+    agent = config["llms"]["nemotron_lightning_agent_llm"]
+    assert f"--served-model-name={agent['model_name']}" in args
+    assert "vllm-inference-service-predictor.aiq-inference.svc" in agent["base_url"]
+    assert 32768 < agent["max_tokens"] < context
+    assert "thinking_token_budget" not in agent["extra_body"]
+    baseline = render(tmp_path, profile="bf16", chart=ROOT / "charts/aiq-workflow-config", namespace="aiq")
+    old = yaml.safe_load(kind(baseline, "ConfigMap")["data"]["config_hybrid_lightning.yml"])
+    for name in ("nemotron_ultra_llm", "nemotron_ultra_writer_llm"):
+        assert config["llms"][name] == old["llms"][name]
 
 
 @pytest.mark.parametrize("nodes", [1, 2])

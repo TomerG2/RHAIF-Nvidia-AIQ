@@ -1,6 +1,6 @@
 # RustFS models and configurable serving
 
-The supplied `nvfp4`, `bf16`, and `bf16-tp4` profiles publish a complete pinned
+The supplied `nvfp4`, `bf16`, `bf16-tp4`, and `b200` profiles publish a complete pinned
 Hugging Face snapshot to RustFS, verify it, and populate OpenShift AI model caches
 before changing serving. The former shared RWO PVC remains protected for rollback;
 serving does not mount it. Each selected node keeps its own copy under the
@@ -20,9 +20,10 @@ together after validation; the preflight gate rejects an unreviewed version.
 ## Settings and presets
 
 Choose the existing preset with `./pattern.sh make install PROFILE=bf16-tp4` (or
-`nvfp4`, the default, or `bf16`). Presets keep the existing model IDs, served
-names, model arguments, shallow token budgets, and remote deep-research calls.
-The two BF16 presets share the same model revision. The RHOAI runtime digest now
+`nvfp4`, the default, `bf16`, or `b200`). Presets use the existing model IDs and
+served names, with profile-specific serving limits and shallow token budgets.
+All presets retain the remote deep-research calls. The BF16 presets share the
+same model revision. The RHOAI runtime digest now
 matches the 3.5.1 operator's installed template.
 The `bf16-tp4` preset reserves 95% of GPU memory: the new runtime's CUDA-graph
 profiling exhausted KV-cache space at the former 90% on four L4 GPUs. Context
@@ -79,6 +80,45 @@ Examples are in `overrides/values-serving-replicated.yaml` and
 `overrides/values-serving-distributed.yaml`. The latter is a **configuration
 example**, not a validated 4 × 8 B200 result. Change model, resources, network, and
 placement together for the actual platform.
+
+### B200 preset
+
+`./pattern.sh make install PROFILE=b200` uses four existing B200 nodes with eight
+GPUs each. It sets `replicas=4`, `nodesPerReplica=1`, `gpusPerNode=8`,
+`tensorParallel=8`, and `pipelineParallel=1`. Each node serves a complete copy of
+the same pinned Lightning BF16 checkpoint using its eight GPUs together. The
+predictor endpoint distributes requests across replicas, and required hostname
+anti-affinity keeps the replicas on distinct nodes. Tensor collectives stay on
+each node's GPU interconnect. Cross-node pipeline and expert parallelism are
+unnecessary for this topology.
+
+Relative to `bf16` and `bf16-tp4`, this preset increases `--max-model-len` from
+65,536 to 262,144 tokens, `--max-num-batched-tokens` from 32,768 to 65,536 tokens
+per iteration per replica, and shallow `maxTokens` from 32,768 to 65,536.
+Context includes both input and output; requests still need to leave room for
+generation. `--enable-chunked-prefill` lets long prompts fit the smaller
+per-iteration token budget. These limits increase serving capacity; the model
+remains 30B parameters. The context limit follows `max_position_embeddings` in
+the [pinned model configuration](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16/blob/a9904d24bcc1d289a1950fa9d2b978c47cf903b9/config.json),
+without overriding the model's declared maximum.
+
+Each replica requests 32 CPUs, 256Gi host memory, 32Gi shared memory, eight GPUs,
+and 90% GPU memory utilization. Prepare at least 350Gi of usable model-cache disk
+on each of the four nodes. Serving requires both
+`nvidia.com/gpu.product=NVIDIA-B200` and `aiq.rhai.redhat.com/model-cache=true`.
+Confirm the GPU product label reported by the GPU operator, and adjust
+`global.serving.nodeSelector` if the platform uses a different value. Set
+`global.serving.nodeNames` if these labels select more than the intended four
+nodes. Cloud provisioning has no default B200 SKU; installation uses the
+existing workers.
+
+The profile is configuration-tested, not hardware-validated on B200. Verify the
+pinned runtime starts all eight ranks, inspect startup KV-cache capacity, and
+benchmark representative context lengths and concurrency before treating the
+batch limit as tuned. The cluster's 32 GPUs provide four independent eight-GPU
+memory pools; one request uses only its assigned replica's pool. See
+[vLLM parallelism](https://docs.vllm.ai/en/latest/serving/parallelism_scaling/) and
+[batch tuning](https://docs.vllm.ai/en/latest/configuration/optimization/).
 
 For GitOps, put shared topology/cache changes in your variant's values or
 `values-global.yaml`. If using another values file, add it **after the profile**

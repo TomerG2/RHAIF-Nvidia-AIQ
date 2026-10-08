@@ -28,6 +28,7 @@ include profiles/$(PROFILE).mk
 endif
 
 # Phase 0 GPU worker provisioning (mirrors validatedpatterns/rag-llm-gitops).
+GPU_SKU_REQUIREMENT ?= an 80 GiB GPU SKU
 ifneq ($(GPU_INSTANCE_TYPE_REQUIRED),true)
 GPU_INSTANCE_TYPE ?= g6.2xlarge
 endif
@@ -52,14 +53,14 @@ ensure-pattern-namespaces: ## Create aiq and aiq-inference namespaces and RHOAI 
 .PHONY: check-gpu-instance-type
 check-gpu-instance-type:
 	@if [ "$(GPU_INSTANCE_TYPE_REQUIRED)" = true ] && [ -z "$(GPU_INSTANCE_TYPE)" ]; then \
-		echo "PROFILE=$(PROFILE) requires GPU_INSTANCE_TYPE set to an 80 GiB GPU SKU" >&2; \
+		echo "PROFILE=$(PROFILE) requires GPU_INSTANCE_TYPE set to $(GPU_SKU_REQUIREMENT)" >&2; \
 		exit 1; \
 	fi
 
 .PHONY: check-gpu-vm-size
 check-gpu-vm-size:
 	@if [ "$(GPU_VM_SIZE_REQUIRED)" = true ] && [ -z "$(GPU_VM_SIZE)" ]; then \
-		echo "PROFILE=$(PROFILE) requires GPU_VM_SIZE set to an 80 GiB GPU SKU" >&2; \
+		echo "PROFILE=$(PROFILE) requires GPU_VM_SIZE set to $(GPU_SKU_REQUIREMENT)" >&2; \
 		exit 1; \
 	fi
 

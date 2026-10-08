@@ -56,6 +56,8 @@ before installation.
 ./pattern.sh make install PROFILE=bf16
 # Same BF16 limits, tensor-parallel across 4 GPUs:
 ./pattern.sh make install PROFILE=bf16-tp4
+# B200 profile:
+./pattern.sh make install PROFILE=b200
 ```
 
 `PROFILE` selects `variants/<name>/` and `profiles/<name>.yaml`. The default is `nvfp4` (NVFP4 checkpoint, small token budgets). `bf16-tp4` is the `bf16` checkpoint with `--tensor-parallel-size=4`.

@@ -13,13 +13,20 @@ The pattern ships the AI-Q umbrella Helm chart at `charts/aiq2-web` (NGC `aiq-ag
 
 ## Deployment profile
 
-The Validated Pattern ships hybrid Lightning (GPU stack + in-cluster vLLM) with selectable serving profiles. Profiles are named by serving config (checkpoint and parallelism), not by GPU SKU. `main.variant` in `values-global.yaml` defaults to `nvfp4`. `./pattern.sh make install PROFILE=<name>` sets `TARGET_VARIANT` and loads `variants/<name>/values-<name>.yaml`, which points vLLM and the workflow chart at `profiles/<name>.yaml`.
+The Validated Pattern ships hybrid Lightning (GPU stack + in-cluster vLLM) with selectable serving profiles. Profiles describe checkpoint and parallelism; `b200` selects a four-node B200 preset. `main.variant` in `values-global.yaml` defaults to `nvfp4`. `./pattern.sh make install PROFILE=<name>` sets `TARGET_VARIANT` and loads `variants/<name>/values-<name>.yaml`, which points vLLM and the workflow chart at `profiles/<name>.yaml`.
 
 | Profile | Install | Checkpoint | Shallow Lightning | Example worker |
 |---|---|---|---|---|
 | `nvfp4` (default) | `./pattern.sh make install` | NVFP4 (`nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4`) | `max_tokens: 1536`, `thinking_token_budget: 512`, vLLM `--max-model-len=4096` | 1× L4 24 GiB (`g6.2xlarge`) |
 | `bf16` | `./pattern.sh make install PROFILE=bf16` | BF16 (`nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16`) | `max_tokens: 32768`, no thinking budget, vLLM `--max-model-len=65536` | 1× A100 or H100 80 GiB |
 | `bf16-tp4` | `./pattern.sh make install PROFILE=bf16-tp4` | same BF16 checkpoint as `bf16` | same token limits as `bf16`, vLLM `--tensor-parallel-size=4` | 4× 24 GiB (`g5.12xlarge`) |
+
+`./pattern.sh make install PROFILE=b200` serves the same BF16 checkpoint with
+four replicas on four existing eight-B200 nodes (32 GPUs total): one replica per
+node, TP=8, PP=1. Its context limit is 262,144 tokens, per-iteration batch limit is
+65,536, and shallow `max_tokens` is 65,536. Prepare 350Gi of usable model-cache disk
+on every node. This preset still needs B200 hardware validation; see
+[placement and tuning](model-storage-and-serving.md#b200-preset).
 
 OpenShift overlays stay `values-openshift-base.yaml` + `values-openshift-hybrid-lightning.yaml`. LLM routing is the same for every installable profile: intent + shallow → in-cluster vLLM (Nemotron 3.5 Lightning); clarifier + deep → NVIDIA API Catalog (Nemotron 3 Ultra).
 
