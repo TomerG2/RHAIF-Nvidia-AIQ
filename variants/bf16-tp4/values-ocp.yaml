@@ -1,0 +1,6 @@
+# This cluster already has a cert-manager OperatorGroup. Reuse it so OLM
+# continues to see exactly one OperatorGroup in cert-manager-operator.
+clusterGroup:
+  namespaces:
+    cert-manager-operator:
+      operatorGroup: false
